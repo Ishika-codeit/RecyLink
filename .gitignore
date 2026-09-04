@@ -1,0 +1,19 @@
+# Python virtual environment
+AI-SERVICE/.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Training datasets
+dataset/
+AI-SERVICE/training_data/
+AI-SERVICE/training_data_balanced/
+
+# TensorFlow generated files
+*.keras.bak
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
