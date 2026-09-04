@@ -10,34 +10,30 @@ function RecyclingIcon() {
       viewBox="0 0 100 100"
       className="recycling-icon"
       xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
     >
-      {/* Top arrow */}
       <path
-        d="M50 8 L69 41 L57 41 L50 29 L43 41 L31 41 Z"
+        d="M50 8 L69 42 L57 42 L50 29 L43 42 L31 42 Z"
         fill="currentColor"
       />
 
-      {/* Left arrow */}
       <path
-        d="M31 41 L18 64 L31 64 L38 52 L45 64 L53 50 L44 34 Z"
+        d="M30 42 L13 71 L28 71 L35 59 L42 71 L51 56 L42 41 Z"
         fill="currentColor"
       />
 
-      {/* Right arrow */}
       <path
-        d="M69 41 L82 64 L69 64 L62 52 L55 64 L47 50 L56 34 Z"
+        d="M70 42 L87 71 L72 71 L65 59 L58 71 L49 56 L58 41 Z"
         fill="currentColor"
       />
 
-      {/* Bottom arrow */}
       <path
-        d="M31 64 L43 64 L50 76 L57 64 L69 64 L50 94 Z"
+        d="M28 71 L42 71 L50 85 L58 71 L72 71 L50 96 Z"
         fill="currentColor"
       />
     </svg>
   )
 }
-
 
 /* ================================
    NAVBAR
