@@ -1,5 +1,4 @@
 const Waste = require("../models/Waste");
-const { checkWaste } = require("../services/aiService");
 
 const createWaste = async (req, res) => {
   try {
@@ -27,57 +26,64 @@ const createWaste = async (req, res) => {
       });
     }
 
-    // Send image + condition to AI
-    const aiResult = await checkWaste(
-      req.file.path,
-      condition
-    );
+    // AI integration is temporarily paused
+    // AI result will be added later
 
-    // Save data + AI result in MongoDB
     const waste = await Waste.create({
       wasteType,
       quantity,
       location,
       condition,
-      image: req.file.path,
-
-      category: aiResult.category,
-
-      classificationConfidence:
-        aiResult.classification_confidence,
-
-      recommendation:
-        aiResult.recommendation,
-
-      repairabilityConfidence:
-        aiResult.repairability_confidence,
-
-      reason:
-        aiResult.reason,
-
-      suggestedActions:
-        aiResult.suggested_actions,
-
-      reusePotential:
-        aiResult.reuse_potential
+      image: req.file.path
     });
 
     res.status(201).json({
       success: true,
-      message: "Waste uploaded and analyzed successfully",
+      message: "Waste uploaded successfully",
       waste
     });
 
   } catch (error) {
     console.error("Create Waste Error:", error);
 
+    if (error.name === "ValidationError") {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid waste data",
+        error: error.message
+      });
+    }
+
     res.status(500).json({
       success: false,
-      message: error.message
+      message: "Failed to create waste",
+      error: error.message
+    });
+  }
+};
+
+const getWastes = async (req, res) => {
+  try {
+    const wastes = await Waste.find().sort({ createdAt: -1 });
+
+    res.status(200).json({
+      success: true,
+      count: wastes.length,
+      wastes
+    });
+
+  } catch (error) {
+    console.error("Get Wastes Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch wastes",
+      error: error.message
     });
   }
 };
 
 module.exports = {
-  createWaste
+  createWaste,
+  getWastes
 };

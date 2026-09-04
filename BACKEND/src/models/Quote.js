@@ -2,13 +2,13 @@ const mongoose = require("mongoose");
 
 const quoteSchema = new mongoose.Schema(
   {
-    waste: {
+    wasteId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Waste",
       required: true
     },
 
-    recyclerName: {
+    collectorId: {
       type: String,
       required: true,
       trim: true
@@ -28,8 +28,8 @@ const quoteSchema = new mongoose.Schema(
 
     status: {
       type: String,
-      enum: ["Pending", "Selected", "Rejected"],
-      default: "Pending"
+      enum: ["PENDING", "SELECTED", "REJECTED"],
+      default: "PENDING"
     }
   },
   {
@@ -37,6 +37,4 @@ const quoteSchema = new mongoose.Schema(
   }
 );
 
-const Quote = mongoose.model("Quote", quoteSchema);
-
-module.exports = Quote;
+module.exports = mongoose.model("Quote", quoteSchema);

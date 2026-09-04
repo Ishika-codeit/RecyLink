@@ -1,15 +1,20 @@
 const Quote = require("../models/Quote");
 const Waste = require("../models/Waste");
 
-// POST /api/quotes
 const createQuote = async (req, res) => {
   try {
-    const { wasteId, recyclerName, amount, message } = req.body;
+    const {
+      wasteId,
+      collectorId,
+      amount,
+      message
+    } = req.body;
 
-    if (!wasteId || !recyclerName || amount === undefined) {
+    // Check required fields
+    if (!wasteId || !collectorId || amount === undefined) {
       return res.status(400).json({
         success: false,
-        message: "wasteId, recyclerName and amount are required"
+        message: "wasteId, collectorId and amount are required"
       });
     }
 
@@ -23,9 +28,10 @@ const createQuote = async (req, res) => {
       });
     }
 
+    // Create quote
     const quote = await Quote.create({
-      waste: wasteId,
-      recyclerName,
+      wasteId,
+      collectorId,
       amount,
       message
     });
@@ -37,6 +43,18 @@ const createQuote = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Create Quote Error:", error);
+
+    if (error.name === "ValidationError" ||
+       error.name === "CastError"
+      ) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid quote data",
+        error: error.message
+      });
+    }
+
     res.status(500).json({
       success: false,
       message: "Failed to create quote",
@@ -45,15 +63,11 @@ const createQuote = async (req, res) => {
   }
 };
 
-
-// GET /api/quotes/:wasteId
-const getQuotesByWaste = async (req, res) => {
+const getQuotes = async (req, res) => {
   try {
-    const { wasteId } = req.params;
-
-    const quotes = await Quote.find({
-      waste: wasteId
-    }).sort({ amount: -1 });
+    const quotes = await Quote.find()
+      .populate("wasteId")
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       success: true,
@@ -62,6 +76,8 @@ const getQuotesByWaste = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Get Quotes Error:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to fetch quotes",
@@ -70,13 +86,37 @@ const getQuotesByWaste = async (req, res) => {
   }
 };
 
+const getQuotesByWaste = async (req, res) => {
+  try {
+    const { wasteId } = req.params;
 
-// PUT /api/quotes/:id/select
+    const quotes = await Quote.find({ wasteId })
+      .populate("wasteId")
+      .sort({ amount: 1 });
+
+    res.status(200).json({
+      success: true,
+      count: quotes.length,
+      quotes
+    });
+
+  } catch (error) {
+    console.error("Get Quotes By Waste Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to fetch quotes for this waste",
+      error: error.message
+    });
+  }
+};
+
 const selectQuote = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { quoteId } = req.params;
 
-    const quote = await Quote.findById(id);
+    // Find selected quote
+    const quote = await Quote.findById(quoteId);
 
     if (!quote) {
       return res.status(404).json({
@@ -86,19 +126,17 @@ const selectQuote = async (req, res) => {
     }
 
     // Select this quote
-    quote.status = "Selected";
+    quote.status = "SELECTED";
     await quote.save();
 
-    // Reject other quotes for same waste
+    // Reject all other quotes for the same waste
     await Quote.updateMany(
       {
-        waste: quote.waste,
+        wasteId: quote.wasteId,
         _id: { $ne: quote._id }
       },
       {
-        $set: {
-          status: "Rejected"
-        }
+        $set: { status: "REJECTED" }
       }
     );
 
@@ -109,6 +147,8 @@ const selectQuote = async (req, res) => {
     });
 
   } catch (error) {
+    console.error("Select Quote Error:", error);
+
     res.status(500).json({
       success: false,
       message: "Failed to select quote",
@@ -117,9 +157,43 @@ const selectQuote = async (req, res) => {
   }
 };
 
+const rejectQuote = async (req, res) => {
+  try {
+    const { quoteId } = req.params;
+
+    const quote = await Quote.findById(quoteId);
+
+    if (!quote) {
+      return res.status(404).json({
+        success: false,
+        message: "Quote not found"
+      });
+    }
+
+    quote.status = "REJECTED";
+    await quote.save();
+
+    res.status(200).json({
+      success: true,
+      message: "Quote rejected successfully",
+      quote
+    });
+
+  } catch (error) {
+    console.error("Reject Quote Error:", error);
+
+    res.status(500).json({
+      success: false,
+      message: "Failed to reject quote",
+      error: error.message
+    });
+  }
+};
 
 module.exports = {
   createQuote,
+  getQuotes,
   getQuotesByWaste,
-  selectQuote
+  selectQuote,
+  rejectQuote
 };
