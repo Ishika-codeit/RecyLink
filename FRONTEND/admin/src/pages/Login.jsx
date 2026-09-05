@@ -7,19 +7,17 @@ function Login() {
   const [password, setPassword] = useState('')
   const navigate = useNavigate()
 
-  const handleLogin = (e) => {
-    e.preventDefault()
+ const handleLogin = (e) => {
+  e.preventDefault()
 
-    if (role === 'admin') {
-      navigate('/admin')
-    } else if (role === 'recycler') {
-      navigate('/recycler')
-    } else {
-      // Collector ka frontend separate project hai
-      window.location.href = 'http://localhost:5174/'
-    }
+  if (role === 'admin') {
+    navigate('/admin')
+  } else if (role === 'recycler') {
+    window.location.href = 'http://localhost:5175/'
+  } else if (role === 'collector') {
+    window.location.href = 'http://localhost:5174/'
   }
-
+}
   return (
     <div className="login-page">
 
