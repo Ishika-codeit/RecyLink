@@ -1,164 +1,373 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 function Dashboard() {
-
-  // Temporary mock data
-  // Later these values will come from backend APIs
+  const user = JSON.parse(
+    localStorage.getItem('user') || 'null'
+  )
 
   const collector = {
-    name: 'Rahul Kumar',
+    name: user?.name || 'Collector',
     location: 'Delhi NCR',
     verified: true,
   }
 
-  const stats = {
-    nearbyDemands: 12,
-    newOffers: 5,
-    totalCollected: '248 kg',
-    earnings: '₹18,450',
+  const [demands, setDemands] = useState([])
+  const [wastes, setWastes] = useState([])
+  const [quotes, setQuotes] = useState([])
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchDashboardData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [
+          demandsResponse,
+          wasteResponse,
+          quotesResponse,
+        ] = await Promise.all([
+          fetch('http://localhost:5000/api/demands'),
+          fetch('http://localhost:5000/api/waste'),
+          fetch('http://localhost:5000/api/quotes'),
+        ])
+
+        const demandsResult =
+          await demandsResponse.json()
+
+        const wasteResult =
+          await wasteResponse.json()
+
+        const quotesResult =
+          await quotesResponse.json()
+
+        if (!demandsResponse.ok) {
+          throw new Error(
+            demandsResult.message ||
+              'Failed to fetch demands'
+          )
+        }
+
+        if (!wasteResponse.ok) {
+          throw new Error(
+            wasteResult.message ||
+              'Failed to fetch e-waste'
+          )
+        }
+
+        if (!quotesResponse.ok) {
+          throw new Error(
+            quotesResult.message ||
+              'Failed to fetch offers'
+          )
+        }
+
+        setDemands(
+          demandsResult.demands || []
+        )
+
+        setWastes(
+          wasteResult.wastes || []
+        )
+
+        setQuotes(
+          quotesResult.quotes || []
+        )
+      } catch (err) {
+        console.error(
+          'Dashboard Error:',
+          err
+        )
+
+        setError(
+          err.message ||
+            'Failed to load dashboard'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchDashboardData()
+  }, [])
+
+
+  // =================================
+  // COLLECTOR WASTE
+  // =================================
+
+  const collectorWastes = useMemo(() => {
+    return wastes.filter((item) => {
+      if (!item.collectorName) return false
+
+      return (
+        item.collectorName
+          .trim()
+          .toLowerCase() ===
+        collector.name
+          .trim()
+          .toLowerCase()
+      )
+    })
+  }, [wastes, collector.name])
+
+
+  // =================================
+  // COLLECTOR QUOTES
+  // =================================
+
+  const collectorQuotes = useMemo(() => {
+    return quotes.filter((quote) => {
+      if (!quote.collectorId) return false
+
+      return (
+        String(quote.collectorId)
+          .trim()
+          .toLowerCase() ===
+        collector.name
+          .trim()
+          .toLowerCase()
+      )
+    })
+  }, [quotes, collector.name])
+
+
+  // =================================
+  // STATS
+  // =================================
+
+  const openDemands = useMemo(() => {
+    const now = new Date()
+
+    return demands.filter((demand) => {
+      if (!demand.deadline) return true
+
+      return (
+        new Date(demand.deadline) >= now
+      )
+    })
+  }, [demands])
+
+
+  const newOffers = useMemo(() => {
+    return collectorQuotes.filter(
+      (quote) =>
+        quote.status === 'PENDING'
+    )
+  }, [collectorQuotes])
+
+
+  const totalCollected = useMemo(() => {
+    return collectorWastes.reduce(
+      (sum, item) =>
+        sum + Number(item.quantity || 0),
+      0
+    )
+  }, [collectorWastes])
+
+
+  const completedCollections = useMemo(() => {
+    return collectorQuotes.filter(
+      (quote) =>
+        quote.status === 'SELECTED'
+    )
+  }, [collectorQuotes])
+
+
+  const totalEarnings = useMemo(() => {
+    return completedCollections.reduce(
+      (sum, quote) =>
+        sum + Number(quote.amount || 0),
+      0
+    )
+  }, [completedCollections])
+
+
+  // =================================
+  // RECOMMENDED DEMAND
+  // =================================
+
+  const recommendedDemand =
+    openDemands.length > 0
+      ? openDemands[0]
+      : null
+
+
+  // =================================
+  // RECENT DEMANDS
+  // =================================
+
+  const nearbyDemands = useMemo(() => {
+    return openDemands.slice(0, 4)
+  }, [openDemands])
+
+
+  // =================================
+  // RECENT OFFERS
+  // =================================
+
+  const recentOffers = useMemo(() => {
+    return [...collectorQuotes]
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
+      )
+      .slice(0, 4)
+  }, [collectorQuotes])
+
+
+  // =================================
+  // ACTIVE COLLECTIONS
+  // =================================
+
+  const activeCollections = useMemo(() => {
+    return completedCollections
+      .map((quote) => {
+        const waste = wastes.find(
+          (item) =>
+            String(item._id) ===
+            String(quote.wasteId)
+        )
+
+        return {
+          id: quote._id,
+
+          material:
+            waste?.category ||
+            waste?.wasteType ||
+            'E-Waste',
+
+          quantity:
+            Number(quote.quantity) ||
+            Number(waste?.quantity) ||
+            0,
+
+          location:
+            waste?.location ||
+            'Location unavailable',
+
+          recycler:
+            'Verified Recycler',
+
+          status: 'Selected',
+        }
+      })
+      .slice(0, 4)
+  }, [
+    completedCollections,
+    wastes,
+  ])
+
+
+  // =================================
+  // RECENT ACTIVITY
+  // =================================
+
+  const recentActivity = useMemo(() => {
+    const activities = []
+
+    collectorQuotes
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
+      )
+      .slice(0, 3)
+      .forEach((quote) => {
+        activities.push({
+          id: `quote-${quote._id}`,
+          type: 'offer',
+          title:
+            quote.status === 'SELECTED'
+              ? 'Recycler offer selected'
+              : 'Recycler offer received',
+          description:
+            quote.amount
+              ? `Offer amount: ₹${Number(
+                  quote.amount
+                ).toLocaleString('en-IN')}.`
+              : 'A recycler offer is available.',
+          time: quote.createdAt
+            ? new Date(
+                quote.createdAt
+              ).toLocaleString('en-IN')
+            : 'Recent',
+        })
+      })
+
+    collectorWastes
+      .slice()
+      .sort(
+        (a, b) =>
+          new Date(b.createdAt) -
+          new Date(a.createdAt)
+      )
+      .slice(0, 3)
+      .forEach((waste) => {
+        activities.push({
+          id: `waste-${waste._id}`,
+          type: 'upload',
+          title: 'E-waste submitted',
+          description: `${
+            waste.category ||
+            waste.wasteType ||
+            'E-waste'
+          } submission processed.`,
+          time: waste.createdAt
+            ? new Date(
+                waste.createdAt
+              ).toLocaleString('en-IN')
+            : 'Recent',
+        })
+      })
+
+    return activities
+      .sort(
+        (a, b) =>
+          new Date(b.time) -
+          new Date(a.time)
+      )
+      .slice(0, 5)
+  }, [collectorQuotes, collectorWastes])
+
+
+  // =================================
+  // LOADING
+  // =================================
+
+  if (loading) {
+    return (
+      <div className="dashboard">
+
+        <section className="dashboard-section">
+          <p>Loading dashboard...</p>
+        </section>
+
+      </div>
+    )
   }
 
-  // Most relevant demand for this collector
-  const recommendedDemand = {
-    id: 1,
-    recycler: 'EcoCycle Recycling',
-    material: 'Laptops',
-    quantity: 25,
-    location: 'Noida Sector 62',
-    distance: '4.2 km',
-    price: '₹450–₹650 / unit',
-    deadline: '12 Sep 2026',
-    match: '94%',
-  }
-
-  const nearbyDemands = [
-    {
-      id: 1,
-      recycler: 'EcoCycle Recycling',
-      material: 'Laptops',
-      quantity: 25,
-      location: 'Noida',
-      distance: '4.2 km',
-      price: '₹450–₹650 / unit',
-      deadline: '12 Sep 2026',
-      status: 'Open',
-    },
-    {
-      id: 2,
-      recycler: 'GreenTech Recyclers',
-      material: 'Desktop Computers',
-      quantity: 15,
-      location: 'Ghaziabad',
-      distance: '8.7 km',
-      price: '₹350–₹500 / unit',
-      deadline: '15 Sep 2026',
-      status: 'Open',
-    },
-    {
-      id: 3,
-      recycler: 'Clean Earth Recycling',
-      material: 'Mobile Phones',
-      quantity: 40,
-      location: 'Delhi',
-      distance: '6.1 km',
-      price: '₹120–₹250 / unit',
-      deadline: '18 Sep 2026',
-      status: 'Open',
-    },
-    {
-      id: 4,
-      recycler: 'GreenLoop India',
-      material: 'Printers',
-      quantity: 10,
-      location: 'Faridabad',
-      distance: '12.3 km',
-      price: '₹300–₹450 / unit',
-      deadline: '20 Sep 2026',
-      status: 'Open',
-    },
-  ]
-
-  const activeCollections = [
-    {
-      id: 1,
-      material: 'Desktop Computers',
-      quantity: 12,
-      recycler: 'GreenTech Recyclers',
-      location: 'Ghaziabad',
-      progress: 65,
-      status: 'Collection in Progress',
-    },
-    {
-      id: 2,
-      material: 'Mobile Phones',
-      quantity: 20,
-      recycler: 'Clean Earth Recycling',
-      location: 'Delhi',
-      progress: 30,
-      status: 'Awaiting Pickup',
-    },
-  ]
-
-  const recentOffers = [
-    {
-      id: 1,
-      recycler: 'EcoCycle Recycling',
-      material: 'Laptops',
-      quantity: 8,
-      price: '₹580 / unit',
-      received: '2 hours ago',
-    },
-    {
-      id: 2,
-      recycler: 'GreenTech Recyclers',
-      material: 'Desktop Computers',
-      quantity: 12,
-      price: '₹420 / unit',
-      received: 'Yesterday',
-    },
-    {
-      id: 3,
-      recycler: 'Clean Earth Recycling',
-      material: 'Mobile Phones',
-      quantity: 20,
-      price: '₹210 / unit',
-      received: '2 days ago',
-    },
-  ]
-
-  const recentActivity = [
-    {
-      id: 1,
-      type: 'offer',
-      title: 'New recycler offer received',
-      description: 'EcoCycle Recycling offered ₹580 per laptop.',
-      time: '2 hours ago',
-    },
-    {
-      id: 2,
-      type: 'ai',
-      title: 'AI assessment completed',
-      description: '8 laptops were assessed for repairability.',
-      time: 'Yesterday',
-    },
-    {
-      id: 3,
-      type: 'upload',
-      title: 'E-waste submitted',
-      description: 'Laptop batch of 8 units submitted successfully.',
-      time: 'Yesterday',
-    },
-    {
-      id: 4,
-      type: 'completed',
-      title: 'Collection completed',
-      description: '12 desktop computers collected successfully.',
-      time: '2 days ago',
-    },
-  ]
 
   return (
     <div className="dashboard">
+
+      {/* =================================
+          ERROR
+      ================================= */}
+
+      {error && (
+        <section className="dashboard-section">
+          <p style={{ color: '#c0392b' }}>
+            {error}
+          </p>
+        </section>
+      )}
+
 
       {/* =================================
           WELCOME HEADER
@@ -167,7 +376,10 @@ function Dashboard() {
       <section className="dashboard-header">
 
         <div>
-          <p>Welcome back,</p>
+
+          <p>
+            Welcome back,
+          </p>
 
           <h1>
             {collector.name}
@@ -176,11 +388,15 @@ function Dashboard() {
           <span>
             📍 {collector.location}
           </span>
+
         </div>
+
 
         {collector.verified && (
           <div>
-            <span>✓ Verified Collector</span>
+            <span>
+              ✓ Verified Collector
+            </span>
           </div>
         )}
 
@@ -194,27 +410,74 @@ function Dashboard() {
       <section className="stats-grid">
 
         <div className="stat-card">
-          <span>Nearby Demands</span>
-          <strong>{stats.nearbyDemands}</strong>
-          <small>Open demands near you</small>
+
+          <span>
+            Nearby Demands
+          </span>
+
+          <strong>
+            {openDemands.length}
+          </strong>
+
+          <small>
+            Open demands available
+          </small>
+
         </div>
 
-        <div className="stat-card">
-          <span>New Offers</span>
-          <strong>{stats.newOffers}</strong>
-          <small>Offers awaiting action</small>
-        </div>
 
         <div className="stat-card">
-          <span>E-Waste Collected</span>
-          <strong>{stats.totalCollected}</strong>
-          <small>Total material collected</small>
+
+          <span>
+            New Offers
+          </span>
+
+          <strong>
+            {newOffers.length}
+          </strong>
+
+          <small>
+            Offers awaiting action
+          </small>
+
         </div>
 
+
         <div className="stat-card">
-          <span>Total Earnings</span>
-          <strong>{stats.earnings}</strong>
-          <small>From completed collections</small>
+
+          <span>
+            E-Waste Collected
+          </span>
+
+          <strong>
+            {totalCollected}
+          </strong>
+
+          <small>
+            Units submitted
+          </small>
+
+        </div>
+
+
+        <div className="stat-card">
+
+          <span>
+            Total Earnings
+          </span>
+
+          <strong>
+            {totalEarnings > 0
+              ? `₹${totalEarnings.toLocaleString(
+                  'en-IN'
+                )}`
+              : '—'}
+          </strong>
+
+          <small>
+            From selected offers
+          </small>
+
         </div>
 
       </section>
@@ -226,7 +489,9 @@ function Dashboard() {
 
       <section className="quick-actions">
 
-        <h2>Quick Actions</h2>
+        <h2>
+          Quick Actions
+        </h2>
 
         <div>
 
@@ -251,81 +516,177 @@ function Dashboard() {
           RECOMMENDED DEMAND
       ================================= */}
 
-      <section className="recommended-demand">
+      {recommendedDemand && (
 
-        <div className="recommended-header">
+        <section className="recommended-demand">
 
-          <div>
-            <span>RECOMMENDED FOR YOU</span>
+          <div className="recommended-header">
 
-            <h2>
-              Best Matching Recycler Demand
-            </h2>
+            <div>
+
+              <span>
+                AVAILABLE DEMAND
+              </span>
+
+              <h2>
+                Open Recycler Demand
+              </h2>
+
+            </div>
+
+            <strong>
+              —
+            </strong>
+
           </div>
 
-          <strong>
-            {recommendedDemand.match} Match
-          </strong>
 
-        </div>
+          <div className="recommended-content">
+
+            <div className="recommended-main">
+
+              <h3>
+                {recommendedDemand.wasteType ||
+                  'E-Waste'}
+              </h3>
+
+              <p>
+                Verified Recycler
+              </p>
 
 
-        <div className="recommended-content">
+              <div className="recommended-details">
 
-          <div className="recommended-main">
+                <span>
+                  📦{' '}
+                  {recommendedDemand.quantity ||
+                    0}{' '}
+                  units
+                </span>
 
-            <h3>
-              {recommendedDemand.material}
-            </h3>
+                <span>
+                  📍{' '}
+                  {recommendedDemand.location ||
+                    'Location unavailable'}
+                </span>
 
-            <p>
-              {recommendedDemand.recycler}
-            </p>
+              </div>
 
-            <div className="recommended-details">
+            </div>
+
+
+            <div className="recommended-price">
+
+              <small>
+                Expected Price
+              </small>
+
+              <strong>
+
+                ₹
+                {Number(
+                  recommendedDemand.minPrice ||
+                    0
+                ).toLocaleString('en-IN')}
+
+                {' – '}
+
+                ₹
+                {Number(
+                  recommendedDemand.maxPrice ||
+                    0
+                ).toLocaleString('en-IN')}
+
+                {' / unit'}
+
+              </strong>
+
 
               <span>
-                📦 {recommendedDemand.quantity} units
+
+                Deadline:{' '}
+
+                {recommendedDemand.deadline
+                  ? new Date(
+                      recommendedDemand.deadline
+                    ).toLocaleDateString(
+                      'en-IN',
+                      {
+                        day: '2-digit',
+                        month: 'short',
+                        year: 'numeric',
+                      }
+                    )
+                  : 'Not specified'}
+
               </span>
 
-              <span>
-                📍 {recommendedDemand.location}
-              </span>
+            </div>
+
+
+            <Link
+              to={`/demands/${recommendedDemand._id}`}
+              className="recommended-button"
+            >
+              View Demand →
+            </Link>
+
+          </div>
+
+        </section>
+
+      )}
+
+
+      {/* =================================
+          NO DEMAND
+      ================================= */}
+
+      {!recommendedDemand && (
+
+        <section className="recommended-demand">
+
+          <div className="recommended-header">
+
+            <div>
 
               <span>
-                🚗 {recommendedDemand.distance}
+                DEMAND NETWORK
               </span>
+
+              <h2>
+                No Open Demands
+              </h2>
 
             </div>
 
           </div>
 
 
-          <div className="recommended-price">
+          <div className="recommended-content">
 
-            <small>Expected Value</small>
+            <div className="recommended-main">
 
-            <strong>
-              {recommendedDemand.price}
-            </strong>
+              <p>
+                There are currently no active
+                recycler demands available.
+              </p>
 
-            <span>
-              Deadline: {recommendedDemand.deadline}
-            </span>
+            </div>
+
+
+            <Link
+              to="/demands"
+              className="recommended-button"
+            >
+              Browse Demands →
+            </Link>
 
           </div>
 
+        </section>
 
-          <Link
-            to={`/demands/${recommendedDemand.id}`}
-            className="recommended-button"
-          >
-            View Demand →
-          </Link>
-
-        </div>
-
-      </section>
+      )}
 
 
       {/* =================================
@@ -337,12 +698,17 @@ function Dashboard() {
         <div className="section-heading">
 
           <div>
-            <h2>Nearby Recycler Demands</h2>
+
+            <h2>
+              Recycler Demands
+            </h2>
 
             <p>
-              Demands matched to your location.
+              Currently open demands on RecyLink.
             </p>
+
           </div>
+
 
           <Link to="/demands">
             View All
@@ -353,52 +719,121 @@ function Dashboard() {
 
         <div className="demand-list">
 
-          {nearbyDemands.map((demand) => (
+          {nearbyDemands.length === 0 ? (
 
-            <div
-              className="demand-item"
-              key={demand.id}
-            >
+            <p>
+              No open demands available.
+            </p>
 
-              <div>
-                <h3>{demand.material}</h3>
+          ) : (
 
-                <p>{demand.recycler}</p>
-              </div>
+            nearbyDemands.map(
+              (demand) => (
 
-              <div>
-                <span>
-                  📦 {demand.quantity} units
-                </span>
+                <div
+                  className="demand-item"
+                  key={demand._id}
+                >
 
-                <span>
-                  📍 {demand.location}
-                </span>
-              </div>
+                  <div>
 
-              <div>
-                <strong>
-                  {demand.price}
-                </strong>
+                    <h3>
+                      {demand.wasteType ||
+                        'E-Waste'}
+                    </h3>
 
-                <small>
-                  {demand.distance} · {demand.deadline}
-                </small>
-              </div>
+                    <p>
+                      Verified Recycler
+                    </p>
 
-              <div>
-                <span>
-                  {demand.status}
-                </span>
+                  </div>
 
-                <Link to={`/demands/${demand.id}`}>
-                  Details
-                </Link>
-              </div>
 
-            </div>
+                  <div>
 
-          ))}
+                    <span>
+                      📦{' '}
+                      {demand.quantity ||
+                        0}{' '}
+                      units
+                    </span>
+
+                    <span>
+                      📍{' '}
+                      {demand.location ||
+                        'Location unavailable'}
+                    </span>
+
+                  </div>
+
+
+                  <div>
+
+                    <strong>
+
+                      ₹
+                      {Number(
+                        demand.minPrice ||
+                          0
+                      ).toLocaleString(
+                        'en-IN'
+                      )}
+
+                      {' – '}
+
+                      ₹
+                      {Number(
+                        demand.maxPrice ||
+                          0
+                      ).toLocaleString(
+                        'en-IN'
+                      )}
+
+                      {' / unit'}
+
+                    </strong>
+
+
+                    <small>
+
+                      {demand.deadline
+                        ? new Date(
+                            demand.deadline
+                          ).toLocaleDateString(
+                            'en-IN'
+                          )
+                        : 'No deadline'}
+
+                    </small>
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      {demand.deadline &&
+                      new Date(
+                        demand.deadline
+                      ) < new Date()
+                        ? 'Expired'
+                        : 'Open'}
+                    </span>
+
+                    <Link
+                      to={`/demands/${demand._id}`}
+                    >
+                      Details
+                    </Link>
+
+                  </div>
+
+                </div>
+
+              )
+            )
+
+          )}
 
         </div>
 
@@ -414,11 +849,15 @@ function Dashboard() {
         <div className="section-heading">
 
           <div>
-            <h2>My Active Collections</h2>
+
+            <h2>
+              My Selected Collections
+            </h2>
 
             <p>
-              Track the collections you have accepted.
+              Recycler offers you have selected.
             </p>
+
           </div>
 
         </div>
@@ -426,66 +865,93 @@ function Dashboard() {
 
         <div className="active-collections">
 
-          {activeCollections.map((collection) => (
+          {activeCollections.length === 0 ? (
 
-            <div
-              className="collection-card"
-              key={collection.id}
-            >
+            <p>
+              No selected collections yet.
+            </p>
 
-              <div className="collection-top">
+          ) : (
 
-                <div>
-                  <h3>{collection.material}</h3>
+            activeCollections.map(
+              (collection) => (
 
-                  <p>
-                    {collection.recycler}
-                  </p>
+                <div
+                  className="collection-card"
+                  key={collection.id}
+                >
+
+                  <div className="collection-top">
+
+                    <div>
+
+                      <h3>
+                        {collection.material}
+                      </h3>
+
+                      <p>
+                        {collection.recycler}
+                      </p>
+
+                    </div>
+
+
+                    <span>
+                      {collection.status}
+                    </span>
+
+                  </div>
+
+
+                  <div className="collection-info">
+
+                    <span>
+                      📦{' '}
+                      {collection.quantity}{' '}
+                      units
+                    </span>
+
+                    <span>
+                      📍{' '}
+                      {collection.location}
+                    </span>
+
+                  </div>
+
+
+                  <div className="progress-area">
+
+                    <div className="progress-label">
+
+                      <span>
+                        Collection Progress
+                      </span>
+
+                      <strong>
+                        —
+                      </strong>
+
+                    </div>
+
+
+                    <div className="progress-bar">
+
+                      <div
+                        style={{
+                          width: '100%',
+                        }}
+                      ></div>
+
+                    </div>
+
+                  </div>
+
                 </div>
 
-                <span>
-                  {collection.status}
-                </span>
+              )
+            )
 
-              </div>
-
-
-              <div className="collection-info">
-
-                <span>
-                  📦 {collection.quantity} units
-                </span>
-
-                <span>
-                  📍 {collection.location}
-                </span>
-
-              </div>
-
-
-              <div className="progress-area">
-
-                <div className="progress-label">
-                  <span>Collection Progress</span>
-
-                  <strong>
-                    {collection.progress}%
-                  </strong>
-                </div>
-
-                <div className="progress-bar">
-                  <div
-                    style={{
-                      width: `${collection.progress}%`,
-                    }}
-                  ></div>
-                </div>
-
-              </div>
-
-            </div>
-
-          ))}
+          )}
 
         </div>
 
@@ -498,6 +964,7 @@ function Dashboard() {
 
       <section className="dashboard-two-column">
 
+
         {/* OFFERS */}
 
         <div className="dashboard-panel">
@@ -505,9 +972,17 @@ function Dashboard() {
           <div className="section-heading">
 
             <div>
-              <h2>Recent Offers</h2>
-              <p>Latest recycler offers.</p>
+
+              <h2>
+                Recent Offers
+              </h2>
+
+              <p>
+                Latest recycler offers.
+              </p>
+
             </div>
+
 
             <Link to="/offers">
               View All
@@ -518,44 +993,103 @@ function Dashboard() {
 
           <div className="offer-list">
 
-            {recentOffers.map((offer) => (
+            {recentOffers.length === 0 ? (
 
-              <div
-                className="offer-item"
-                key={offer.id}
-              >
+              <p>
+                No offers received yet.
+              </p>
 
-                <div className="offer-icon">
-                  ₹
-                </div>
+            ) : (
 
-                <div className="offer-details">
+              recentOffers.map(
+                (offer) => {
 
-                  <strong>
-                    {offer.recycler}
-                  </strong>
+                  const waste =
+                    wastes.find(
+                      (item) =>
+                        String(
+                          item._id
+                        ) ===
+                        String(
+                          offer.wasteId
+                        )
+                    )
 
-                  <span>
-                    {offer.material} · {offer.quantity} units
-                  </span>
+                  return (
 
-                </div>
+                    <div
+                      className="offer-item"
+                      key={offer._id}
+                    >
 
-                <div className="offer-price">
+                      <div className="offer-icon">
+                        ₹
+                      </div>
 
-                  <strong>
-                    {offer.price}
-                  </strong>
 
-                  <small>
-                    {offer.received}
-                  </small>
+                      <div className="offer-details">
 
-                </div>
+                        <strong>
+                          Verified Recycler
+                        </strong>
 
-              </div>
+                        <span>
 
-            ))}
+                          {waste?.category ||
+                            waste?.wasteType ||
+                            'E-Waste'}
+
+                          {' · '}
+
+                          {offer.quantity ||
+                            waste?.quantity ||
+                            0}{' '}
+                          units
+
+                        </span>
+
+                      </div>
+
+
+                      <div className="offer-price">
+
+                        <strong>
+
+                          {Number(
+                            offer.pricePerUnit ||
+                              0
+                          ) > 0
+                            ? `₹${Number(
+                                offer.pricePerUnit
+                              ).toLocaleString(
+                                'en-IN'
+                              )} / unit`
+                            : 'Price unavailable'}
+
+                        </strong>
+
+
+                        <small>
+
+                          {offer.createdAt
+                            ? new Date(
+                                offer.createdAt
+                              ).toLocaleDateString(
+                                'en-IN'
+                              )
+                            : 'Recent'}
+
+                        </small>
+
+                      </div>
+
+                    </div>
+
+                  )
+                }
+              )
+
+            )}
 
           </div>
 
@@ -569,8 +1103,15 @@ function Dashboard() {
           <div className="section-heading">
 
             <div>
-              <h2>Recent Activity</h2>
-              <p>Your latest RecyLink activity.</p>
+
+              <h2>
+                Recent Activity
+              </h2>
+
+              <p>
+                Your latest RecyLink activity.
+              </p>
+
             </div>
 
           </div>
@@ -578,42 +1119,61 @@ function Dashboard() {
 
           <div className="activity-list">
 
-            {recentActivity.map((activity) => (
+            {recentActivity.length === 0 ? (
 
-              <div
-                className="activity-item"
-                key={activity.id}
-              >
+              <p>
+                No recent activity available.
+              </p>
 
-                <div className="activity-icon">
+            ) : (
 
-                  {activity.type === 'offer' && '₹'}
-                  {activity.type === 'ai' && '✦'}
-                  {activity.type === 'upload' && '↑'}
-                  {activity.type === 'completed' && '✓'}
+              recentActivity.map(
+                (activity) => (
 
-                </div>
+                  <div
+                    className="activity-item"
+                    key={activity.id}
+                  >
+
+                    <div className="activity-icon">
+
+                      {activity.type ===
+                        'offer' && '₹'}
+
+                      {activity.type ===
+                        'upload' && '↑'}
+
+                      {activity.type ===
+                        'ai' && '✦'}
+
+                      {activity.type ===
+                        'completed' && '✓'}
+
+                    </div>
 
 
-                <div>
+                    <div>
 
-                  <strong>
-                    {activity.title}
-                  </strong>
+                      <strong>
+                        {activity.title}
+                      </strong>
 
-                  <p>
-                    {activity.description}
-                  </p>
+                      <p>
+                        {activity.description}
+                      </p>
 
-                  <small>
-                    {activity.time}
-                  </small>
+                      <small>
+                        {activity.time}
+                      </small>
 
-                </div>
+                    </div>
 
-              </div>
+                  </div>
 
-            ))}
+                )
+              )
+
+            )}
 
           </div>
 
@@ -629,35 +1189,61 @@ function Dashboard() {
       <section className="impact-section">
 
         <div>
-          <span>YOUR RECYCLING IMPACT</span>
+
+          <span>
+            YOUR RECYCLING ACTIVITY
+          </span>
 
           <h2>
             Making every collection count.
           </h2>
 
           <p>
-            Your contribution helps divert electronic waste
-            from informal disposal and connects it with
-            responsible recycling.
+            Your submissions help connect collected
+            e-waste with the formal recycling ecosystem.
           </p>
+
         </div>
 
 
         <div className="impact-stats">
 
           <div>
-            <strong>248 kg</strong>
-            <span>E-Waste Diverted</span>
+
+            <strong>
+              {totalCollected}
+            </strong>
+
+            <span>
+              E-Waste Units
+            </span>
+
           </div>
 
-          <div>
-            <strong>18</strong>
-            <span>Collections Completed</span>
-          </div>
 
           <div>
-            <strong>7</strong>
-            <span>Recyclers Connected</span>
+
+            <strong>
+              {completedCollections.length}
+            </strong>
+
+            <span>
+              Selected Collections
+            </span>
+
+          </div>
+
+
+          <div>
+
+            <strong>
+              {collectorQuotes.length}
+            </strong>
+
+            <span>
+              Recycler Offers
+            </span>
+
           </div>
 
         </div>

@@ -25,6 +25,11 @@ const wasteSchema = new mongoose.Schema(
       required: true,
       trim: true
     },
+    collectorName: {
+  type: String,
+  required: true,
+  trim: true
+},
 
     image: {
       type: String,

@@ -26,15 +26,53 @@ function CreateDemand() {
     }))
   }
 
-  const handleSubmit = (e) => {
-    e.preventDefault()
+  const handleSubmit = async (e) => {
+  e.preventDefault()
 
-    console.log('New Demand:', form)
+  try {
+    const response = await fetch(
+      'http://localhost:5000/api/demands',
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          wasteType: form.category,
+          quantity: Number(form.quantity),
+          location: form.location,
+          minPrice: Number(form.minPrice),
+          maxPrice: Number(form.maxPrice),
+          deadline: form.deadline,
+          condition: form.condition,
+          description: form.description,
+        }),
+      }
+    )
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      throw new Error(
+        result.message || 'Failed to create demand'
+      )
+    }
+
+    console.log('Demand Created:', result)
 
     alert('Demand published successfully!')
 
     navigate('/recycler/demands')
+
+  } catch (error) {
+    console.error('Create Demand Error:', error)
+
+    alert(
+      error.message ||
+      'Something went wrong while creating demand.'
+    )
   }
+}
 
   return (
     <div className="recycler-app">

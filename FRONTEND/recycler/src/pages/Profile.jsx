@@ -1,246 +1,943 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 
 function Profile() {
+  const storedUser = JSON.parse(
+    localStorage.getItem('recyclerUser') ||
+      localStorage.getItem('user') ||
+      'null'
+  )
+
+  const [wastes, setWastes] = useState([])
+  const [quotes, setQuotes] = useState([])
+
+  const [editing, setEditing] = useState(false)
+
+  const [profile, setProfile] = useState({
+    organizationName:
+      storedUser?.organizationName ||
+      'Recycler Organization',
+
+    contactPerson:
+      storedUser?.contactPerson ||
+      storedUser?.name ||
+      'Recycler',
+
+    email:
+      storedUser?.email ||
+      'recycler@example.com',
+
+    phone:
+      storedUser?.phone ||
+      'Not provided',
+
+    location:
+      storedUser?.location ||
+      'Delhi NCR',
+
+    operatingRegion:
+      storedUser?.operatingRegion ||
+      'Delhi NCR',
+
+    description:
+      storedUser?.description ||
+      'E-waste recycling organization connected through RecyLink.',
+  })
+
+  const [form, setForm] = useState(profile)
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+
+  // =================================
+  // FETCH BACKEND DATA
+  // =================================
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [
+          wasteResponse,
+          quoteResponse,
+        ] = await Promise.all([
+          fetch('http://localhost:5000/api/waste'),
+          fetch('http://localhost:5000/api/quotes'),
+        ])
+
+        const wasteResult =
+          await wasteResponse.json()
+
+        const quoteResult =
+          await quoteResponse.json()
+
+        if (!wasteResponse.ok) {
+          throw new Error(
+            wasteResult.message ||
+              'Failed to fetch e-waste'
+          )
+        }
+
+        if (!quoteResponse.ok) {
+          throw new Error(
+            quoteResult.message ||
+              'Failed to fetch quotes'
+          )
+        }
+
+        setWastes(
+          wasteResult.wastes || []
+        )
+
+        setQuotes(
+          quoteResult.quotes || []
+        )
+      } catch (err) {
+        console.error(
+          'Profile Error:',
+          err
+        )
+
+        setError(
+          err.message ||
+            'Failed to load profile data'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProfileData()
+  }, [])
+
+
+  // =================================
+  // RECYCLER QUOTES
+  // =================================
+
+  /*
+    Current backend uses collectorId only.
+    There is no recyclerId/recyclerName field
+    in Quote model, so recycler-specific
+    filtering is not possible yet.
+  */
+
+  const recyclerQuotes = quotes
+
+
+  // =================================
+  // PERFORMANCE
+  // =================================
+
+  const completedCollections =
+    useMemo(() => {
+      return recyclerQuotes.filter(
+        (quote) =>
+          quote.status === 'SELECTED'
+      )
+    }, [recyclerQuotes])
+
+
+  const totalUnits = useMemo(() => {
+    return completedCollections.reduce(
+      (sum, quote) =>
+        sum +
+        Number(quote.quantity || 0),
+      0
+    )
+  }, [completedCollections])
+
+
+  const totalValue = useMemo(() => {
+    return completedCollections.reduce(
+      (sum, quote) =>
+        sum +
+        Number(quote.amount || 0),
+      0
+    )
+  }, [completedCollections])
+
+
+  // =================================
+  // ACCEPTED MATERIALS
+  // =================================
+
+  const acceptedMaterials =
+    useMemo(() => {
+      return [
+        ...new Set(
+          wastes
+            .map(
+              (item) =>
+                item.category ||
+                item.wasteType
+            )
+            .filter(Boolean)
+        ),
+      ]
+    }, [wastes])
+
+
+  // =================================
+  // PROFILE SAVE
+  // =================================
+
+  const handleSave = () => {
+    const updatedProfile = {
+      ...form,
+    }
+
+    setProfile(updatedProfile)
+
+    localStorage.setItem(
+      'recyclerProfile',
+      JSON.stringify(
+        updatedProfile
+      )
+    )
+
+    const existingUser =
+      JSON.parse(
+        localStorage.getItem(
+          'recyclerUser'
+        ) ||
+          localStorage.getItem(
+            'user'
+          ) ||
+          'null'
+      ) || {}
+
+    localStorage.setItem(
+      'recyclerUser',
+      JSON.stringify({
+        ...existingUser,
+        ...updatedProfile,
+        role: 'recycler',
+      })
+    )
+
+    setEditing(false)
+  }
+
+
+  const handleChange = (e) => {
+    const { name, value } =
+      e.target
+
+    setForm((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
+
+
+  const handleEdit = () => {
+    setForm(profile)
+    setEditing(true)
+  }
+
+
+  // =================================
+  // INITIALS
+  // =================================
+
+  const initials =
+    profile.organizationName
+      .split(' ')
+      .map(
+        (word) => word[0]
+      )
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
+
+
   return (
     <div className="recycler-app">
+
       <Navbar />
 
       <main className="recycler-profile-page">
 
-        {/* Header */}
+        {/* =================================
+            HEADER
+        ================================= */}
+
         <div className="profile-page-header">
+
           <div>
-            <span className="eyebrow">ACCOUNT & VERIFICATION</span>
-            <h1>Recycler Profile</h1>
+
+            <span className="eyebrow">
+              ACCOUNT & VERIFICATION
+            </span>
+
+            <h1>
+              Recycler Profile
+            </h1>
+
             <p>
-              Manage your organization details, verification and recycling
-              preferences.
+              Manage your organization details,
+              verification and recycling preferences.
             </p>
+
           </div>
 
-          <button className="profile-edit-btn">
-            Edit Profile
-          </button>
+
+          {!editing ? (
+
+            <button
+              className="profile-edit-btn"
+              onClick={handleEdit}
+            >
+              Edit Profile
+            </button>
+
+          ) : (
+
+            <div
+              style={{
+                display: 'flex',
+                gap: '10px',
+              }}
+            >
+
+              <button
+                className="profile-edit-btn"
+                onClick={handleSave}
+              >
+                Save Changes
+              </button>
+
+              <button
+                className="profile-edit-btn"
+                onClick={() => {
+                  setForm(profile)
+                  setEditing(false)
+                }}
+              >
+                Cancel
+              </button>
+
+            </div>
+
+          )}
+
         </div>
+
+
+        {/* =================================
+            ERROR
+        ================================= */}
+
+        {error && (
+
+          <div
+            className="collections-info"
+            style={{
+              marginBottom: '20px',
+            }}
+          >
+
+            <div className="collections-info-icon">
+              !
+            </div>
+
+            <div>
+
+              <strong>
+                Profile data warning
+              </strong>
+
+              <p>
+                {error}
+              </p>
+
+            </div>
+
+          </div>
+
+        )}
+
 
         <div className="profile-layout">
 
-          {/* Left */}
+          {/* =================================
+              LEFT
+          ================================= */}
+
           <div className="profile-main">
 
-            {/* Organization */}
+
+            {/* ORGANIZATION */}
+
             <section className="profile-card organization-card">
 
               <div className="profile-cover">
-                <div className="large-profile-avatar">EC</div>
+
+                <div className="large-profile-avatar">
+                  {initials}
+                </div>
 
                 <div className="verified-profile-badge">
                   ✓ Verified Recycler
                 </div>
+
               </div>
+
 
               <div className="organization-content">
-                <span className="card-eyebrow">ORGANIZATION</span>
 
-                <h2>EcoCycle Recycling Pvt. Ltd.</h2>
+                <span className="card-eyebrow">
+                  ORGANIZATION
+                </span>
+
+                <h2>
+                  {profile.organizationName}
+                </h2>
 
                 <p className="profile-description">
-                  Authorized e-waste collection and recycling organization
-                  focused on responsible material recovery and circular
-                  processing.
+                  {profile.description}
                 </p>
 
+
                 <div className="organization-meta">
-                  <span>● Delhi NCR</span>
-                  <span>◉ eco-cycle@example.com</span>
-                  <span>◷ Joined Jan 2025</span>
+
+                  <span>
+                    ● {profile.operatingRegion}
+                  </span>
+
+                  <span>
+                    ◉ {profile.email}
+                  </span>
+
+                  <span>
+                    ◷ Joined —
+                  </span>
+
                 </div>
+
               </div>
+
             </section>
 
-            {/* Details */}
+
+            {/* =================================
+                BUSINESS INFORMATION
+            ================================= */}
+
             <section className="profile-card">
 
               <div className="profile-card-heading">
+
                 <div>
-                  <span className="card-eyebrow">BUSINESS INFORMATION</span>
-                  <h2>Organization Details</h2>
+
+                  <span className="card-eyebrow">
+                    BUSINESS INFORMATION
+                  </span>
+
+                  <h2>
+                    Organization Details
+                  </h2>
+
                 </div>
 
-                <button className="text-action">Edit</button>
+
+                {!editing && (
+
+                  <button
+                    className="text-action"
+                    onClick={handleEdit}
+                  >
+                    Edit
+                  </button>
+
+                )}
+
               </div>
 
-              <div className="profile-info-grid">
 
-                <div>
-                  <span>ORGANIZATION NAME</span>
-                  <strong>EcoCycle Recycling Pvt. Ltd.</strong>
+              {editing ? (
+
+                <div className="profile-info-grid">
+
+                  <div>
+
+                    <span>
+                      ORGANIZATION NAME
+                    </span>
+
+                    <input
+                      name="organizationName"
+                      value={
+                        form.organizationName
+                      }
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      CONTACT PERSON
+                    </span>
+
+                    <input
+                      name="contactPerson"
+                      value={
+                        form.contactPerson
+                      }
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      EMAIL ADDRESS
+                    </span>
+
+                    <input
+                      name="email"
+                      value={form.email}
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      PHONE NUMBER
+                    </span>
+
+                    <input
+                      name="phone"
+                      value={form.phone}
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      LOCATION
+                    </span>
+
+                    <input
+                      name="location"
+                      value={
+                        form.location
+                      }
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
+
+                  <div>
+
+                    <span>
+                      OPERATING REGION
+                    </span>
+
+                    <input
+                      name="operatingRegion"
+                      value={
+                        form.operatingRegion
+                      }
+                      onChange={handleChange}
+                    />
+
+                  </div>
+
                 </div>
 
-                <div>
-                  <span>CONTACT PERSON</span>
-                  <strong>Arjun Mehta</strong>
+              ) : (
+
+                <div className="profile-info-grid">
+
+                  <div>
+                    <span>
+                      ORGANIZATION NAME
+                    </span>
+
+                    <strong>
+                      {profile.organizationName}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      CONTACT PERSON
+                    </span>
+
+                    <strong>
+                      {profile.contactPerson}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      EMAIL ADDRESS
+                    </span>
+
+                    <strong>
+                      {profile.email}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      PHONE NUMBER
+                    </span>
+
+                    <strong>
+                      {profile.phone}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      LOCATION
+                    </span>
+
+                    <strong>
+                      {profile.location}
+                    </strong>
+                  </div>
+
+
+                  <div>
+                    <span>
+                      OPERATING REGION
+                    </span>
+
+                    <strong>
+                      {profile.operatingRegion}
+                    </strong>
+                  </div>
+
                 </div>
 
-                <div>
-                  <span>EMAIL ADDRESS</span>
-                  <strong>eco-cycle@example.com</strong>
-                </div>
+              )}
 
-                <div>
-                  <span>PHONE NUMBER</span>
-                  <strong>+91 98XX XXX 421</strong>
-                </div>
-
-                <div>
-                  <span>LOCATION</span>
-                  <strong>Sector 62, Noida</strong>
-                </div>
-
-                <div>
-                  <span>OPERATING REGION</span>
-                  <strong>Delhi NCR</strong>
-                </div>
-
-              </div>
             </section>
 
-            {/* Capabilities */}
+
+            {/* =================================
+                CAPABILITIES
+            ================================= */}
+
             <section className="profile-card">
 
               <div className="profile-card-heading">
+
                 <div>
-                  <span className="card-eyebrow">RECYCLING CAPABILITIES</span>
-                  <h2>Accepted E-Waste</h2>
+
+                  <span className="card-eyebrow">
+                    RECYCLING CAPABILITIES
+                  </span>
+
+                  <h2>
+                    Accepted E-Waste
+                  </h2>
+
                 </div>
+
               </div>
+
 
               <div className="accepted-materials">
-                <span>💻 Laptops</span>
-                <span>🖥️ Desktops</span>
-                <span>📱 Mobile Phones</span>
-                <span>🖨️ Printers</span>
-                <span>🔌 PCBs</span>
-                <span>⌨️ Peripherals</span>
+
+                {acceptedMaterials.length === 0 ? (
+
+                  <span>
+                    No material categories
+                    recorded yet
+                  </span>
+
+                ) : (
+
+                  acceptedMaterials.map(
+                    (material) => (
+
+                      <span
+                        key={material}
+                      >
+                        ♻️ {material}
+                      </span>
+
+                    )
+                  )
+
+                )}
+
               </div>
 
             </section>
 
-            {/* Preferences */}
+
+            {/* =================================
+                PREFERENCES
+            ================================= */}
+
             <section className="profile-card">
 
               <div className="profile-card-heading">
+
                 <div>
-                  <span className="card-eyebrow">OPERATING PREFERENCES</span>
-                  <h2>Collection Preferences</h2>
+
+                  <span className="card-eyebrow">
+                    OPERATING PREFERENCES
+                  </span>
+
+                  <h2>
+                    Collection Preferences
+                  </h2>
+
                 </div>
+
               </div>
+
 
               <div className="preference-list">
 
                 <div className="preference-item">
+
                   <div>
-                    <strong>Recycler Pickup</strong>
-                    <span>Allow collectors to request pickup from their location.</span>
+
+                    <strong>
+                      Recycler Pickup
+                    </strong>
+
+                    <span>
+                      Pickup workflow is available
+                      through recycler offers.
+                    </span>
+
                   </div>
+
 
                   <div className="toggle active">
                     <span />
                   </div>
+
                 </div>
 
+
                 <div className="preference-item">
+
                   <div>
-                    <strong>Demand Notifications</strong>
-                    <span>Receive alerts when new collector submissions match your demands.</span>
+
+                    <strong>
+                      Demand Notifications
+                    </strong>
+
+                    <span>
+                      Demand creation and
+                      management are available.
+                    </span>
+
                   </div>
+
 
                   <div className="toggle active">
                     <span />
                   </div>
+
                 </div>
 
+
                 <div className="preference-item">
+
                   <div>
-                    <strong>AI Assessment Alerts</strong>
-                    <span>Get notified when a new e-waste submission is AI assessed.</span>
+
+                    <strong>
+                      AI Assessment Alerts
+                    </strong>
+
+                    <span>
+                      AI assessment results are
+                      available with submitted e-waste.
+                    </span>
+
                   </div>
+
 
                   <div className="toggle active">
                     <span />
                   </div>
+
                 </div>
 
               </div>
+
             </section>
 
           </div>
 
-          {/* Right */}
+
+          {/* =================================
+              RIGHT SIDEBAR
+          ================================= */}
+
           <aside className="profile-sidebar">
 
-            {/* Verification */}
+
+            {/* VERIFICATION */}
+
             <section className="verification-card">
 
-              <div className="verification-icon">✓</div>
+              <div className="verification-icon">
+                ✓
+              </div>
 
-              <span className="card-eyebrow">VERIFICATION STATUS</span>
+              <span className="card-eyebrow">
+                VERIFICATION STATUS
+              </span>
 
-              <h2>Verified Recycler</h2>
+              <h2>
+                Verified Recycler
+              </h2>
 
               <p>
-                Your organization has completed RecyLink's recycler
-                verification process.
+                Recycler verification is currently
+                represented at the prototype level.
+                A dedicated verification API is not
+                available in the current backend.
               </p>
 
+
               <div className="verification-items">
+
                 <div>
                   <span>✓</span>
-                  <strong>Organization verified</strong>
+                  <strong>
+                    Organization status
+                  </strong>
                 </div>
 
                 <div>
                   <span>✓</span>
-                  <strong>Recycler credentials verified</strong>
+                  <strong>
+                    Recycler access
+                  </strong>
                 </div>
 
                 <div>
                   <span>✓</span>
-                  <strong>Operating location verified</strong>
+                  <strong>
+                    Platform access
+                  </strong>
                 </div>
+
               </div>
 
-              <small>Verified on 18 Jan 2025</small>
+
+              <small>
+                Verification date unavailable
+              </small>
 
             </section>
 
-            {/* Performance */}
+
+            {/* =================================
+                PERFORMANCE
+            ================================= */}
+
             <section className="profile-performance">
 
-              <span className="card-eyebrow">PERFORMANCE</span>
+              <span className="card-eyebrow">
+                PERFORMANCE
+              </span>
 
-              <h2>Recycler Overview</h2>
+              <h2>
+                Recycler Overview
+              </h2>
+
 
               <div className="performance-stat">
-                <strong>4.9</strong>
-                <span>Average Rating</span>
+
+                <strong>
+                  —
+                </strong>
+
+                <span>
+                  Average Rating
+                </span>
+
               </div>
 
-              <div className="performance-stat">
-                <strong>126</strong>
-                <span>Completed Collections</span>
-              </div>
 
               <div className="performance-stat">
-                <strong>2,840 kg</strong>
-                <span>E-Waste Recycled</span>
+
+                <strong>
+                  {completedCollections.length}
+                </strong>
+
+                <span>
+                  Selected Collections
+                </span>
+
+              </div>
+
+
+              <div className="performance-stat">
+
+                <strong>
+                  {totalUnits}
+                </strong>
+
+                <span>
+                  Units in Selected Collections
+                </span>
+
+              </div>
+
+
+              <div className="performance-stat">
+
+                <strong>
+                  {totalValue > 0
+                    ? `₹${totalValue.toLocaleString(
+                        'en-IN'
+                      )}`
+                    : '—'}
+                </strong>
+
+                <span>
+                  Selected Offer Value
+                </span>
+
               </div>
 
             </section>
 
-            <Link to="/recycler/demands/create" className="profile-cta">
+
+            {/* =================================
+                CTA
+            ================================= */}
+
+            <Link
+              to="/recycler/demands/create"
+              className="profile-cta"
+            >
               + Create New Demand
             </Link>
 
@@ -250,7 +947,9 @@ function Profile() {
 
       </main>
 
+
       <Footer />
+
     </div>
   )
 }

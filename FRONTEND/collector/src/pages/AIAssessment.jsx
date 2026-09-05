@@ -1,45 +1,52 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 
 function AIAssessment() {
   const navigate = useNavigate()
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analyzed, setAnalyzed] = useState(true)
+  const location = useLocation()
 
-  const wasteData = {
-    device: 'Dell Latitude Laptop',
-    category: 'Laptop',
-    quantity: 5,
-    weight: '11.5 kg',
-    condition: 'Partially Working',
-    location: 'Delhi NCR',
+  // Backend se AddEwaste page ke through aaya hua data
+  const waste = location.state?.waste
+
+  // Agar directly page open ho gaya
+  if (!waste) {
+    return (
+      <div className="ai-assessment-page">
+        <div className="ai-info">
+          <span>⚠️</span>
+          <div>
+            <strong>No AI Assessment Found</strong>
+            <p>
+              Please submit e-waste first to generate an AI assessment.
+            </p>
+          </div>
+        </div>
+
+        <div className="ai-actions">
+          <button
+            className="primary-button"
+            onClick={() => navigate('/add-ewaste')}
+          >
+            ← Add E-Waste
+          </button>
+        </div>
+      </div>
+    )
   }
 
-  const assessment = {
-    repairability: 72,
-    condition: 'Partially Repairable',
-    confidence: 91,
-    reusableComponents: [
-      'LCD Display',
-      'RAM Module',
-      'Keyboard',
-      'Battery',
-      'Charger',
-    ],
-    recyclableWeight: '7.8 kg',
-    estimatedRecovery: '68%',
-    recommendation: 'Repair / Refurbish',
-  }
+  // Backend values
+  const classificationConfidence = Math.round(
+    (waste.classificationConfidence || 0) * 100
+  )
 
-  const handleAnalyze = () => {
-    setIsAnalyzing(true)
-    setAnalyzed(false)
+  const repairabilityConfidence = Math.round(
+    (waste.repairabilityConfidence || 0) * 100
+  )
 
-    setTimeout(() => {
-      setIsAnalyzing(false)
-      setAnalyzed(true)
-    }, 1800)
-  }
+  const recommendation = waste.recommendation || 'NEEDS_INSPECTION'
+
+  const recommendationText = recommendation.replaceAll('_', ' ')
+
+  const isNotEWaste = recommendation === 'NOT_E_WASTE'
 
   return (
     <div className="ai-assessment-page">
@@ -47,11 +54,17 @@ function AIAssessment() {
       {/* Header */}
       <div className="ai-header">
         <div>
-          <span className="page-label">AI POWERED ANALYSIS</span>
-          <h1>AI Assessment</h1>
+          <span className="page-label">
+            AI POWERED ANALYSIS
+          </span>
+
+          <h1>
+            AI Assessment
+          </h1>
+
           <p>
-            Our AI analyzes your e-waste to determine repairability,
-            reusable components and recycling potential.
+            Our AI analyzes your e-waste to determine its category,
+            repairability and recommended processing route.
           </p>
         </div>
 
@@ -61,12 +74,17 @@ function AIAssessment() {
         </div>
       </div>
 
+
       {/* Waste Summary */}
       <section className="ai-card">
+
         <div className="card-title">
           <div>
             <h2>📦 E-Waste Submitted</h2>
-            <p>Review the details before AI analysis.</p>
+
+            <p>
+              Details received from your e-waste submission.
+            </p>
           </div>
 
           <button
@@ -77,171 +95,294 @@ function AIAssessment() {
           </button>
         </div>
 
+
         <div className="waste-summary">
-          <div className="waste-icon">💻</div>
+
+          <div className="waste-icon">
+            💻
+          </div>
 
           <div className="waste-main">
-            <h3>{wasteData.device}</h3>
-            <span>{wasteData.category}</span>
+            <h3>
+              {waste.category || waste.wasteType}
+            </h3>
+
+            <span>
+              AI Detected Category
+            </span>
           </div>
+
 
           <div className="summary-item">
             <small>Quantity</small>
-            <strong>{wasteData.quantity} units</strong>
+
+            <strong>
+              {waste.quantity} units
+            </strong>
           </div>
 
-          <div className="summary-item">
-            <small>Total Weight</small>
-            <strong>{wasteData.weight}</strong>
-          </div>
 
           <div className="summary-item">
             <small>Condition</small>
-            <strong>{wasteData.condition}</strong>
+
+            <strong>
+              {waste.condition}
+            </strong>
           </div>
+
+
+          <div className="summary-item">
+            <small>Location</small>
+
+            <strong>
+              {waste.location}
+            </strong>
+          </div>
+
         </div>
+
       </section>
+
 
       {/* AI Analysis */}
       <section className="ai-analysis-card">
 
         <div className="analysis-header">
+
           <div>
-            <span className="ai-badge">🤖 AI INSIGHT</span>
-            <h2>Repairability Assessment</h2>
+            <span className="ai-badge">
+              🤖 AI INSIGHT
+            </span>
+
+            <h2>
+              Repairability Assessment
+            </h2>
+
             <p>
-              AI prediction based on device condition and submitted details.
+              AI prediction based on the uploaded image and item condition.
             </p>
           </div>
 
           <button
             className="analyze-button"
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
+            onClick={() => navigate('/add-ewaste')}
           >
-            {isAnalyzing ? 'Analyzing...' : '↻ Re-analyze'}
+            ↻ Re-analyze
           </button>
+
         </div>
 
-        {isAnalyzing ? (
-          <div className="analyzing-box">
-            <div className="loader"></div>
-            <h3>AI is analyzing your e-waste...</h3>
-            <p>
-              Checking repairability, component recovery and recycling
-              potential.
-            </p>
-          </div>
-        ) : analyzed ? (
-          <>
-            {/* Score */}
-            <div className="assessment-grid">
 
-              <div className="score-card">
-                <div className="score-circle">
-                  <span>{assessment.repairability}%</span>
-                  <small>Repairable</small>
-                </div>
+        {/* Assessment */}
+        <div className="assessment-grid">
 
-                <div className="score-content">
-                  <h3>{assessment.condition}</h3>
-                  <p>
-                    This device has good potential for repair or
-                    refurbishment.
-                  </p>
+          {/* Repairability */}
+          <div className="score-card">
 
-                  <div className="confidence">
-                    <span>AI Confidence</span>
-                    <strong>{assessment.confidence}%</strong>
-                  </div>
-                </div>
-              </div>
+            <div className="score-circle">
+              <span>
+                {repairabilityConfidence}%
+              </span>
 
-              {/* Recommendation */}
-              <div className="recommendation-card">
-                <span className="recommendation-label">
-                  RECOMMENDED ACTION
+              <small>
+                Repairability
+              </small>
+            </div>
+
+
+            <div className="score-content">
+
+              <h3>
+                {isNotEWaste
+                  ? 'Not E-Waste'
+                  : recommendationText}
+              </h3>
+
+              <p>
+                {waste.reason}
+              </p>
+
+
+              <div className="confidence">
+
+                <span>
+                  AI Classification Confidence
                 </span>
 
-                <div className="recommendation-icon">🔧</div>
+                <strong>
+                  {classificationConfidence}%
+                </strong>
 
-                <h3>{assessment.recommendation}</h3>
+              </div>
+
+            </div>
+
+          </div>
+
+
+          {/* Recommendation */}
+          <div className="recommendation-card">
+
+            <span className="recommendation-label">
+              RECOMMENDED ACTION
+            </span>
+
+            <div className="recommendation-icon">
+              {isNotEWaste ? '⚠️' : '🔧'}
+            </div>
+
+            <h3>
+              {recommendationText}
+            </h3>
+
+            <p>
+              {waste.reason}
+            </p>
+
+
+            <div className="recovery-value">
+
+              <span>
+                Reuse Potential
+              </span>
+
+              <strong>
+                {waste.reusePotential || 'N/A'}
+              </strong>
+
+            </div>
+
+          </div>
+
+        </div>
+
+
+        {/* Suggested Actions */}
+        {!isNotEWaste &&
+          waste.suggestedActions?.length > 0 && (
+
+          <div className="components-section">
+
+            <div className="section-heading">
+
+              <div>
+                <h3>
+                  AI Suggested Actions
+                </h3>
 
                 <p>
-                  Repairing or refurbishing this device could recover
-                  valuable components before final recycling.
+                  Recommended next steps based on the AI assessment.
                 </p>
+              </div>
 
-                <div className="recovery-value">
-                  <span>Estimated recovery</span>
-                  <strong>{assessment.estimatedRecovery}</strong>
+              <span className="component-count">
+                {waste.suggestedActions.length} actions
+              </span>
+
+            </div>
+
+
+            <div className="component-list">
+
+              {waste.suggestedActions.map(
+                (action, index) => (
+
+                <div
+                  className="component-item"
+                  key={index}
+                >
+                  <span className="component-check">
+                    ✓
+                  </span>
+
+                  <span>
+                    {action}
+                  </span>
                 </div>
-              </div>
+
+              ))}
+
             </div>
 
-            {/* Components */}
-            <div className="components-section">
-              <div className="section-heading">
-                <div>
-                  <h3>Reusable Components</h3>
-                  <p>Components that may have recovery value.</p>
-                </div>
+          </div>
 
-                <span className="component-count">
-                  {assessment.reusableComponents.length} detected
-                </span>
-              </div>
+        )}
 
-              <div className="component-list">
-                {assessment.reusableComponents.map((component, index) => (
-                  <div className="component-item" key={index}>
-                    <span className="component-check">✓</span>
-                    <span>{component}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
 
-            {/* Recycling estimate */}
-            <div className="recycling-estimate">
-              <div>
-                <span>♻️ Estimated Recyclable Material</span>
-                <strong>{assessment.recyclableWeight}</strong>
-              </div>
+        {/* AI Details */}
+        <div className="recycling-estimate">
 
-              <div className="estimate-divider"></div>
+          <div>
+            <span>
+              🤖 Detected Category
+            </span>
 
-              <div>
-                <span>📍 Collection Location</span>
-                <strong>{wasteData.location}</strong>
-              </div>
+            <strong>
+              {waste.category}
+            </strong>
+          </div>
 
-              <div className="estimate-divider"></div>
 
-              <div>
-                <span>⚡ Processing Route</span>
-                <strong>Repair → Recycle</strong>
-              </div>
-            </div>
-          </>
-        ) : null}
+          <div className="estimate-divider"></div>
+
+
+          <div>
+            <span>
+              🎯 Classification Confidence
+            </span>
+
+            <strong>
+              {classificationConfidence}%
+            </strong>
+          </div>
+
+
+          <div className="estimate-divider"></div>
+
+
+          <div>
+            <span>
+              ♻️ Reuse Potential
+            </span>
+
+            <strong>
+              {waste.reusePotential || 'N/A'}
+            </strong>
+          </div>
+
+        </div>
+
       </section>
+
 
       {/* Info */}
       <div className="ai-info">
-        <span>💡</span>
+
+        <span>
+          💡
+        </span>
+
         <div>
-          <strong>Why AI Assessment?</strong>
+
+          <strong>
+            Why AI Assessment?
+          </strong>
+
           <p>
-            RecyLink uses AI to identify whether e-waste can be repaired,
-            refurbished or should directly move to formal recycling.
-            This helps collectors get better-value offers from recyclers.
+            RecyLink uses AI to identify e-waste and assess
+            whether it requires repair, refurbishment or
+            further inspection before formal recycling.
+            This helps collectors and recyclers make better decisions.
           </p>
+
         </div>
+
       </div>
 
-      {/* Bottom Action */}
+
+      {/* Bottom Actions */}
       <div className="ai-actions">
+
         <button
           className="secondary-button"
           onClick={() => navigate('/add-ewaste')}
@@ -249,12 +390,14 @@ function AIAssessment() {
           ← Back to E-Waste
         </button>
 
+
         <button
           className="primary-button"
           onClick={() => navigate('/offers')}
         >
           Continue to Recycler Offers →
         </button>
+
       </div>
 
     </div>

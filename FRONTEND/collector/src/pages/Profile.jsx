@@ -1,97 +1,505 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 function Profile() {
   const [activeTab, setActiveTab] = useState('overview')
+  const [editing, setEditing] = useState(false)
 
-  const collections = [
-    {
-      material: 'Desktop Computers',
-      quantity: 12,
-      recycler: 'GreenTech Recyclers',
-      location: 'Ghaziabad',
-      date: '28 Aug 2026',
-      earnings: '₹5,040',
-    },
-    {
-      material: 'Mobile Phones',
-      quantity: 20,
-      recycler: 'Clean Earth Recycling',
-      location: 'Delhi',
-      date: '24 Aug 2026',
-      earnings: '₹4,200',
-    },
-    {
-      material: 'Printers',
-      quantity: 8,
-      recycler: 'GreenLoop India',
-      location: 'Faridabad',
-      date: '20 Aug 2026',
-      earnings: '₹2,880',
-    },
-    {
-      material: 'Laptops',
-      quantity: 5,
-      recycler: 'EcoCycle Recycling',
-      location: 'Noida',
-      date: '15 Aug 2026',
-      earnings: '₹2,900',
-    },
-  ]
+  const [wastes, setWastes] = useState([])
+  const [quotes, setQuotes] = useState([])
+
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const loggedInUser = JSON.parse(
+    localStorage.getItem('user') || 'null'
+  )
+
+  const savedProfile = JSON.parse(
+    localStorage.getItem('collectorProfile') || 'null'
+  )
+
+  const [profile, setProfile] = useState(
+    savedProfile || {
+      name: loggedInUser?.name || 'Collector',
+      email: loggedInUser?.email || '',
+      phone: '',
+      serviceArea: 'Delhi NCR',
+      collectorType: 'Independent Collector',
+    }
+  )
+
+  useEffect(() => {
+    const fetchProfileData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [wasteResponse, quoteResponse] =
+          await Promise.all([
+            fetch('http://localhost:5000/api/waste'),
+            fetch('http://localhost:5000/api/quotes'),
+          ])
+
+        const wasteResult = await wasteResponse.json()
+        const quoteResult = await quoteResponse.json()
+
+        if (!wasteResponse.ok) {
+          throw new Error(
+            wasteResult.message ||
+              'Failed to fetch collection data'
+          )
+        }
+
+        if (!quoteResponse.ok) {
+          throw new Error(
+            quoteResult.message ||
+              'Failed to fetch offer data'
+          )
+        }
+
+        setWastes(wasteResult.wastes || [])
+        setQuotes(quoteResult.quotes || [])
+      } catch (err) {
+        console.error('Profile Data Error:', err)
+
+        setError(
+          err.message ||
+            'Failed to load profile data'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchProfileData()
+  }, [])
+
+
+  // -----------------------------------
+  // COLLECTOR NAME
+  // -----------------------------------
+
+  const collectorName =
+    profile.name ||
+    loggedInUser?.name ||
+    'Collector'
+
+
+  // -----------------------------------
+  // FILTER COLLECTOR DATA
+  // -----------------------------------
+
+  const collectorWastes = useMemo(() => {
+    return wastes.filter((item) => {
+      if (!item.collectorName) return false
+
+      return (
+        item.collectorName.trim().toLowerCase() ===
+        collectorName.trim().toLowerCase()
+      )
+    })
+  }, [wastes, collectorName])
+
+
+  const collectorQuotes = useMemo(() => {
+    return quotes.filter((quote) => {
+      if (!quote.collectorId) return false
+
+      return (
+        String(quote.collectorId)
+          .trim()
+          .toLowerCase() ===
+        collectorName.trim().toLowerCase()
+      )
+    })
+  }, [quotes, collectorName])
+
+
+  // -----------------------------------
+  // COMPLETED COLLECTIONS
+  // -----------------------------------
+
+  const completedCollections = useMemo(() => {
+    return collectorQuotes.filter(
+      (quote) => quote.status === 'SELECTED'
+    )
+  }, [collectorQuotes])
+
+
+  // -----------------------------------
+  // TOTAL UNITS
+  // -----------------------------------
+
+  const totalUnits = useMemo(() => {
+    return collectorWastes.reduce(
+      (sum, item) =>
+        sum + Number(item.quantity || 0),
+      0
+    )
+  }, [collectorWastes])
+
+
+  // -----------------------------------
+  // UNIQUE RECYCLER ACTIVITY
+  // -----------------------------------
+
+  const recyclerConnections = useMemo(() => {
+    /*
+      Backend currently does not store a recycler
+      user/profile identity.
+
+      Therefore this counts quote activity rather
+      than pretending to know actual recycler names.
+    */
+
+    return collectorQuotes.length
+  }, [collectorQuotes])
+
+
+  // -----------------------------------
+  // PROFILE SAVE
+  // -----------------------------------
+
+  const handleProfileChange = (e) => {
+    setProfile({
+      ...profile,
+      [e.target.name]: e.target.value,
+    })
+  }
+
+
+  const handleSaveProfile = () => {
+    localStorage.setItem(
+      'collectorProfile',
+      JSON.stringify(profile)
+    )
+
+    // Keep login identity in sync
+    const currentUser = JSON.parse(
+      localStorage.getItem('user') || '{}'
+    )
+
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        ...currentUser,
+        name: profile.name,
+        email: profile.email,
+        role: 'collector',
+      })
+    )
+
+    setEditing(false)
+
+    alert('Profile updated successfully!')
+  }
+
+
+  // -----------------------------------
+  // INITIALS
+  // -----------------------------------
+
+  const getInitials = (name) => {
+    if (!name) return 'C'
+
+    return name
+      .trim()
+      .split(' ')
+      .map((word) => word[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
+  }
+
+
+  // -----------------------------------
+  // COLLECTION FORMAT
+  // -----------------------------------
+
+  const recentCollections = useMemo(() => {
+    return completedCollections
+      .map((quote) => {
+        const waste = wastes.find(
+          (item) =>
+            String(item._id) ===
+            String(quote.wasteId)
+        )
+
+        return {
+          id: quote._id,
+          material:
+            waste?.category ||
+            waste?.wasteType ||
+            'E-Waste',
+          quantity:
+            Number(quote.quantity) ||
+            Number(waste?.quantity) ||
+            0,
+          location:
+            waste?.location ||
+            'Location unavailable',
+          date: quote.createdAt
+            ? new Date(
+                quote.createdAt
+              ).toLocaleDateString(
+                'en-IN',
+                {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                }
+              )
+            : 'Date unavailable',
+          amount:
+            Number(quote.amount) || 0,
+        }
+      })
+      .slice(0, 10)
+  }, [completedCollections, wastes])
+
+
+  // -----------------------------------
+  // LOADING
+  // -----------------------------------
+
+  if (loading) {
+    return (
+      <div className="profile-page">
+        <section className="profile-card">
+          <p>Loading profile...</p>
+        </section>
+      </div>
+    )
+  }
+
 
   return (
     <div className="profile-page">
 
-      {/* PROFILE HEADER */}
+      {/* ERROR */}
+
+      {error && (
+        <section
+          className="profile-card"
+          style={{ marginBottom: '20px' }}
+        >
+          <p style={{ color: '#c0392b' }}>
+            {error}
+          </p>
+        </section>
+      )}
+
+
+      {/* =========================
+          PROFILE HEADER
+      ========================= */}
+
       <section className="profile-hero">
+
         <div className="profile-main">
+
           <div className="profile-avatar">
-            RK
+            {getInitials(collectorName)}
           </div>
+
 
           <div className="profile-identity">
+
             <div className="profile-name-row">
-              <h1>Raj Kumar</h1>
+
+              <h1>
+                {collectorName}
+              </h1>
+
               <span className="verified-profile">
-                ✓ Verified Collector
+                ✓ Collector Account
               </span>
+
             </div>
 
-            <p>Independent E-Waste Collector</p>
+
+            <p>
+              {profile.collectorType}
+            </p>
+
 
             <div className="profile-meta">
-              <span>📍 Delhi NCR</span>
+
+              <span>
+                📍 {profile.serviceArea}
+              </span>
+
               <span>•</span>
-              <span>Member since Jan 2026</span>
+
+              <span>
+                RecyLink Collector
+              </span>
+
             </div>
+
           </div>
+
         </div>
 
-        <button className="edit-profile-button">
-          ✎ Edit Profile
+
+        <button
+          className="edit-profile-button"
+          onClick={() =>
+            setEditing(!editing)
+          }
+        >
+          {editing
+            ? 'Cancel'
+            : '✎ Edit Profile'}
         </button>
+
       </section>
 
 
-      {/* TABS */}
+      {/* =========================
+          EDIT PROFILE
+      ========================= */}
+
+      {editing && (
+
+        <section className="profile-card">
+
+          <div className="profile-card-heading">
+
+            <div>
+              <h2>
+                Edit Profile
+              </h2>
+
+              <p>
+                Update your collector information
+              </p>
+            </div>
+
+          </div>
+
+
+          <div className="profile-info-list">
+
+            <div>
+
+              <span>
+                Full Name
+              </span>
+
+              <input
+                name="name"
+                value={profile.name}
+                onChange={handleProfileChange}
+              />
+
+            </div>
+
+
+            <div>
+
+              <span>
+                Email Address
+              </span>
+
+              <input
+                type="email"
+                name="email"
+                value={profile.email}
+                onChange={handleProfileChange}
+              />
+
+            </div>
+
+
+            <div>
+
+              <span>
+                Phone Number
+              </span>
+
+              <input
+                name="phone"
+                placeholder="Enter phone number"
+                value={profile.phone}
+                onChange={handleProfileChange}
+              />
+
+            </div>
+
+
+            <div>
+
+              <span>
+                Service Area
+              </span>
+
+              <input
+                name="serviceArea"
+                value={profile.serviceArea}
+                onChange={handleProfileChange}
+              />
+
+            </div>
+
+          </div>
+
+
+          <button
+            className="save-profile-btn"
+            onClick={handleSaveProfile}
+          >
+            Save Changes
+          </button>
+
+        </section>
+
+      )}
+
+
+      {/* =========================
+          TABS
+      ========================= */}
+
       <div className="profile-tabs">
 
         <button
-          className={activeTab === 'overview' ? 'active' : ''}
-          onClick={() => setActiveTab('overview')}
+          className={
+            activeTab === 'overview'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('overview')
+          }
         >
           Overview
         </button>
 
+
         <button
-          className={activeTab === 'collections' ? 'active' : ''}
-          onClick={() => setActiveTab('collections')}
+          className={
+            activeTab === 'collections'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('collections')
+          }
         >
           My Collections
         </button>
 
+
         <button
-          className={activeTab === 'settings' ? 'active' : ''}
-          onClick={() => setActiveTab('settings')}
+          className={
+            activeTab === 'settings'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('settings')
+          }
         >
           Account Settings
         </button>
@@ -99,90 +507,186 @@ function Profile() {
       </div>
 
 
-      {/* ================= OVERVIEW ================= */}
+      {/* =========================
+          OVERVIEW
+      ========================= */}
 
       {activeTab === 'overview' && (
+
         <>
+
           {/* STATS */}
+
           <section className="profile-stats">
 
             <div className="profile-stat">
+
               <span>♻️</span>
+
               <div>
-                <strong>248 kg</strong>
-                <small>E-Waste Collected</small>
+
+                <strong>
+                  {totalUnits}
+                </strong>
+
+                <small>
+                  E-Waste Units
+                </small>
+
               </div>
+
             </div>
 
+
             <div className="profile-stat">
+
               <span>📦</span>
+
               <div>
-                <strong>18</strong>
-                <small>Completed Collections</small>
+
+                <strong>
+                  {completedCollections.length}
+                </strong>
+
+                <small>
+                  Completed Collections
+                </small>
+
               </div>
+
             </div>
 
+
             <div className="profile-stat">
+
               <span>🏢</span>
+
               <div>
-                <strong>7</strong>
-                <small>Recyclers Connected</small>
+
+                <strong>
+                  {recyclerConnections}
+                </strong>
+
+                <small>
+                  Recycler Interactions
+                </small>
+
               </div>
+
             </div>
 
+
             <div className="profile-stat">
+
               <span>⭐</span>
+
               <div>
-                <strong>4.8 / 5</strong>
-                <small>Collector Rating</small>
+
+                <strong>
+                  —
+                </strong>
+
+                <small>
+                  Rating unavailable
+                </small>
+
               </div>
+
             </div>
 
           </section>
 
 
           {/* TWO COLUMNS */}
+
           <div className="profile-grid">
 
+
             {/* INFORMATION */}
+
             <section className="profile-card">
 
               <div className="profile-card-heading">
+
                 <div>
-                  <h2>Collector Information</h2>
-                  <p>Your basic account information</p>
+
+                  <h2>
+                    Collector Information
+                  </h2>
+
+                  <p>
+                    Your current account information
+                  </p>
+
                 </div>
+
               </div>
+
 
               <div className="profile-info-list">
 
                 <div>
-                  <span>Full Name</span>
-                  <strong>Raj Kumar</strong>
+                  <span>
+                    Full Name
+                  </span>
+
+                  <strong>
+                    {profile.name}
+                  </strong>
                 </div>
 
-                <div>
-                  <span>Phone Number</span>
-                  <strong>+91 98XXXXXX42</strong>
-                </div>
 
                 <div>
-                  <span>Email Address</span>
-                  <strong>raj.kumar@example.com</strong>
+                  <span>
+                    Phone Number
+                  </span>
+
+                  <strong>
+                    {profile.phone ||
+                      'Not provided'}
+                  </strong>
                 </div>
 
-                <div>
-                  <span>Service Area</span>
-                  <strong>Delhi NCR</strong>
-                </div>
 
                 <div>
-                  <span>Collector Type</span>
-                  <strong>Independent Collector</strong>
+                  <span>
+                    Email Address
+                  </span>
+
+                  <strong>
+                    {profile.email ||
+                      'Not provided'}
+                  </strong>
                 </div>
 
+
                 <div>
-                  <span>Account Status</span>
+                  <span>
+                    Service Area
+                  </span>
+
+                  <strong>
+                    {profile.serviceArea}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    Collector Type
+                  </span>
+
+                  <strong>
+                    {profile.collectorType}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    Account Status
+                  </span>
+
                   <strong className="active-account">
                     ● Active
                   </strong>
@@ -194,41 +698,99 @@ function Profile() {
 
 
             {/* IMPACT */}
+
             <section className="profile-card impact-card">
 
               <div className="profile-card-heading">
+
                 <div>
-                  <h2>Environmental Impact</h2>
-                  <p>Your contribution to responsible recycling</p>
+
+                  <h2>
+                    Platform Contribution
+                  </h2>
+
+                  <p>
+                    Your activity on RecyLink
+                  </p>
+
                 </div>
+
               </div>
+
 
               <div className="impact-big">
-                <strong>248</strong>
-                <span>kg e-waste responsibly collected</span>
+
+                <strong>
+                  {totalUnits}
+                </strong>
+
+                <span>
+                  e-waste units submitted
+                </span>
+
               </div>
+
 
               <div className="impact-stat-line">
-                <span>Collections Completed</span>
-                <strong>18</strong>
+
+                <span>
+                  Collections Completed
+                </span>
+
+                <strong>
+                  {completedCollections.length}
+                </strong>
+
               </div>
 
+
               <div className="impact-bar">
-                <span style={{ width: '82%' }}></span>
+
+                <span
+                  style={{
+                    width:
+                      completedCollections.length > 0
+                        ? '100%'
+                        : '0%',
+                  }}
+                ></span>
+
               </div>
+
 
               <div className="impact-stat-line">
-                <span>Recycler Connections</span>
-                <strong>7</strong>
+
+                <span>
+                  Recycler Interactions
+                </span>
+
+                <strong>
+                  {recyclerConnections}
+                </strong>
+
               </div>
 
+
               <div className="impact-bar">
-                <span style={{ width: '65%' }}></span>
+
+                <span
+                  style={{
+                    width:
+                      recyclerConnections > 0
+                        ? '100%'
+                        : '0%',
+                  }}
+                ></span>
+
               </div>
+
 
               <div className="impact-message">
-                🌱 Every collection helps move e-waste
-                toward the formal recycling ecosystem.
+
+                🌱 Your submissions help connect
+                collected e-waste with the formal
+                recycling ecosystem.
+
               </div>
 
             </section>
@@ -237,18 +799,29 @@ function Profile() {
 
 
           {/* RECENT COLLECTIONS */}
+
           <section className="profile-card recent-collections">
 
             <div className="profile-card-heading">
 
               <div>
-                <h2>Recent Collections</h2>
-                <p>Your latest completed e-waste collections</p>
+
+                <h2>
+                  Recent Collections
+                </h2>
+
+                <p>
+                  Your latest selected recycler offers
+                </p>
+
               </div>
+
 
               <button
                 className="view-all-button"
-                onClick={() => setActiveTab('collections')}
+                onClick={() =>
+                  setActiveTab('collections')
+                }
               >
                 View All →
               </button>
@@ -259,100 +832,186 @@ function Profile() {
             <div className="collection-table">
 
               <div className="table-header">
-                <span>Material</span>
-                <span>Recycler</span>
-                <span>Quantity</span>
-                <span>Date</span>
-                <span>Earnings</span>
-                <span>Status</span>
+
+                <span>
+                  Material
+                </span>
+
+                <span>
+                  Location
+                </span>
+
+                <span>
+                  Quantity
+                </span>
+
+                <span>
+                  Date
+                </span>
+
+                <span>
+                  Amount
+                </span>
+
+                <span>
+                  Status
+                </span>
+
               </div>
 
 
-              {collections.map((item, index) => (
+              {recentCollections.length === 0 ? (
 
-                <div className="table-row" key={index}>
+                <div className="table-row">
 
-                  <strong>{item.material}</strong>
-
-                  <span>{item.recycler}</span>
-
-                  <span>{item.quantity} units</span>
-
-                  <span>{item.date}</span>
-
-                  <strong className="earning">
-                    {item.earnings}
-                  </strong>
-
-                  <span className="completed-status">
-                    ✓ Completed
+                  <span>
+                    No completed collections yet.
                   </span>
 
                 </div>
 
-              ))}
+              ) : (
+
+                recentCollections.map(
+                  (item) => (
+
+                    <div
+                      className="table-row"
+                      key={item.id}
+                    >
+
+                      <strong>
+                        {item.material}
+                      </strong>
+
+                      <span>
+                        {item.location}
+                      </span>
+
+                      <span>
+                        {item.quantity} units
+                      </span>
+
+                      <span>
+                        {item.date}
+                      </span>
+
+                      <strong className="earning">
+                        {item.amount > 0
+                          ? `₹${item.amount.toLocaleString(
+                              'en-IN'
+                            )}`
+                          : '—'}
+                      </strong>
+
+                      <span className="completed-status">
+                        ✓ Selected
+                      </span>
+
+                    </div>
+
+                  )
+                )
+
+              )}
 
             </div>
 
           </section>
+
         </>
+
       )}
 
 
-      {/* ================= COLLECTIONS ================= */}
+      {/* =========================
+          COLLECTIONS
+      ========================= */}
 
       {activeTab === 'collections' && (
 
         <section className="profile-card">
 
           <div className="profile-card-heading">
+
             <div>
-              <h2>My Collections</h2>
-              <p>Complete history of your e-waste collections</p>
+
+              <h2>
+                My Collections
+              </h2>
+
+              <p>
+                Collections linked to your account
+              </p>
+
             </div>
+
           </div>
 
 
           <div className="full-collection-list">
 
-            {collections.map((item, index) => (
+            {recentCollections.length === 0 ? (
 
-              <div
-                className="full-collection-item"
-                key={index}
-              >
+              <p>
+                No completed collections available.
+              </p>
 
-                <div className="collection-item-icon">
-                  ♻️
-                </div>
+            ) : (
 
-                <div className="collection-item-main">
+              recentCollections.map(
+                (item) => (
 
-                  <h3>{item.material}</h3>
+                  <div
+                    className="full-collection-item"
+                    key={item.id}
+                  >
 
-                  <p>
-                    {item.quantity} units • {item.recycler}
-                  </p>
+                    <div className="collection-item-icon">
+                      ♻️
+                    </div>
 
-                  <small>
-                    📍 {item.location} • {item.date}
-                  </small>
 
-                </div>
+                    <div className="collection-item-main">
 
-                <div className="collection-item-right">
+                      <h3>
+                        {item.material}
+                      </h3>
 
-                  <strong>{item.earnings}</strong>
+                      <p>
+                        {item.quantity} units
+                      </p>
 
-                  <span>
-                    ✓ Completed
-                  </span>
+                      <small>
+                        📍 {item.location} •{' '}
+                        {item.date}
+                      </small>
 
-                </div>
+                    </div>
 
-              </div>
 
-            ))}
+                    <div className="collection-item-right">
+
+                      <strong>
+                        {item.amount > 0
+                          ? `₹${item.amount.toLocaleString(
+                              'en-IN'
+                            )}`
+                          : '—'}
+                      </strong>
+
+                      <span>
+                        ✓ Selected
+                      </span>
+
+                    </div>
+
+                  </div>
+
+                )
+              )
+
+            )}
 
           </div>
 
@@ -361,7 +1020,9 @@ function Profile() {
       )}
 
 
-      {/* ================= SETTINGS ================= */}
+      {/* =========================
+          SETTINGS
+      ========================= */}
 
       {activeTab === 'settings' && (
 
@@ -370,8 +1031,15 @@ function Profile() {
           <div className="profile-card-heading">
 
             <div>
-              <h2>Account Settings</h2>
-              <p>Manage your RecyLink account preferences</p>
+
+              <h2>
+                Account Settings
+              </h2>
+
+              <p>
+                Manage your RecyLink account preferences
+              </p>
+
             </div>
 
           </div>
@@ -379,57 +1047,114 @@ function Profile() {
 
           <div className="settings-list">
 
+
             <div className="setting-item">
+
               <div>
-                <strong>Notification Preferences</strong>
+
+                <strong>
+                  Notification Preferences
+                </strong>
+
                 <p>
-                  Receive alerts for new demands and recycler offers.
+                  Receive alerts for new demands
+                  and recycler offers.
                 </p>
+
               </div>
 
-              <button className="setting-action">
+              <button
+                className="setting-action"
+                onClick={() =>
+                  alert(
+                    'Notification preferences will be connected with the notification service.'
+                  )
+                }
+              >
                 Manage
               </button>
+
             </div>
 
 
             <div className="setting-item">
+
               <div>
-                <strong>Service Location</strong>
-                <p>Delhi NCR</p>
+
+                <strong>
+                  Service Location
+                </strong>
+
+                <p>
+                  {profile.serviceArea}
+                </p>
+
               </div>
 
-              <button className="setting-action">
+              <button
+                className="setting-action"
+                onClick={() => setEditing(true)}
+              >
                 Update
               </button>
+
             </div>
 
 
             <div className="setting-item">
+
               <div>
-                <strong>Privacy & Security</strong>
+
+                <strong>
+                  Privacy & Security
+                </strong>
+
                 <p>
-                  Manage your account security and privacy.
+                  Account security controls will be
+                  available with authentication APIs.
                 </p>
+
               </div>
 
-              <button className="setting-action">
+              <button
+                className="setting-action"
+                onClick={() =>
+                  alert(
+                    'Security management is not available in the current backend.'
+                  )
+                }
+              >
                 Manage
               </button>
+
             </div>
 
 
             <div className="setting-item">
+
               <div>
-                <strong>Help & Support</strong>
+
+                <strong>
+                  Help & Support
+                </strong>
+
                 <p>
                   Contact the RecyLink support team.
                 </p>
+
               </div>
 
-              <button className="setting-action">
+              <button
+                className="setting-action"
+                onClick={() =>
+                  alert(
+                    'Support contact functionality can be connected later.'
+                  )
+                }
+              >
                 Contact
               </button>
+
             </div>
 
           </div>

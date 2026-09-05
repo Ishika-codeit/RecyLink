@@ -5,6 +5,7 @@ function Login() {
   const [role, setRole] = useState('admin')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [collectorName, setCollectorName] = useState('')
   const navigate = useNavigate()
 
  const handleLogin = (e) => {
@@ -12,9 +13,26 @@ function Login() {
 
   if (role === 'admin') {
     navigate('/admin')
+
   } else if (role === 'recycler') {
     window.location.href = 'http://localhost:5175/'
+
   } else if (role === 'collector') {
+
+    if (!collectorName.trim()) {
+      alert('Please enter your collector name.')
+      return
+    }
+
+    localStorage.setItem(
+      'user',
+      JSON.stringify({
+        name: collectorName.trim(),
+        role: 'collector',
+        email: email,
+      })
+    )
+
     window.location.href = 'http://localhost:5174/'
   }
 }
@@ -95,6 +113,19 @@ function Login() {
               onChange={(e) => setPassword(e.target.value)}
               required
             />
+            {role === 'collector' && (
+  <>
+    <label>Collector Name</label>
+
+    <input
+      type="text"
+      placeholder="Enter your name"
+      value={collectorName}
+      onChange={(e) => setCollectorName(e.target.value)}
+      required
+    />
+  </>
+)}
 
             <label className="role-label">Login as</label>
 

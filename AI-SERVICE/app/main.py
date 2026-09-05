@@ -28,9 +28,11 @@ app.add_middleware(
 )
 
 
-MODEL_PATH = Path("AI-SERVICE/models/ewaste_classifier.keras")
+MODEL_PATH = Path(__file__).resolve().parent.parent / "models" / "ewaste_classifier.keras"
 
 model = tf.keras.models.load_model(MODEL_PATH)
+
+
 
 
 CLASSES = [

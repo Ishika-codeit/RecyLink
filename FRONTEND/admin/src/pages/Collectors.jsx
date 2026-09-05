@@ -1,141 +1,336 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 function Collectors() {
   const [search, setSearch] = useState('')
   const [status, setStatus] = useState('All')
 
-  const collectors = [
-    {
-      id: 'COL-1024',
-      name: 'Raj Kumar',
-      phone: '+91 98XXXXXX42',
-      location: 'Delhi NCR',
-      collections: 18,
-      waste: '248 kg',
-      rating: '4.8',
-      status: 'Active',
-      joined: 'Jan 2026'
-    },
-    {
-      id: 'COL-1025',
-      name: 'Amit Sharma',
-      phone: '+91 97XXXXXX18',
-      location: 'Noida',
-      collections: 14,
-      waste: '192 kg',
-      rating: '4.7',
-      status: 'Active',
-      joined: 'Feb 2026'
-    },
-    {
-      id: 'COL-1026',
-      name: 'Rahul Kumar',
-      phone: '+91 96XXXXXX73',
-      location: 'Ghaziabad',
-      collections: 9,
-      waste: '116 kg',
-      rating: '4.5',
-      status: 'Pending',
-      joined: 'Mar 2026'
-    },
-    {
-      id: 'COL-1027',
-      name: 'Neha Singh',
-      phone: '+91 95XXXXXX61',
-      location: 'Faridabad',
-      collections: 21,
-      waste: '305 kg',
-      rating: '4.9',
-      status: 'Active',
-      joined: 'Dec 2025'
-    },
-    {
-      id: 'COL-1028',
-      name: 'Suresh Verma',
-      phone: '+91 94XXXXXX29',
-      location: 'Delhi',
-      collections: 6,
-      waste: '78 kg',
-      rating: '4.3',
-      status: 'Inactive',
-      joined: 'Apr 2026'
-    },
-    {
-      id: 'COL-1029',
-      name: 'Pooja Yadav',
-      phone: '+91 93XXXXXX45',
-      location: 'Greater Noida',
-      collections: 11,
-      waste: '143 kg',
-      rating: '4.6',
-      status: 'Active',
-      joined: 'Feb 2026'
+  const [waste, setWaste] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchCollectors = async () => {
+      try {
+        setLoading(true)
+
+        const response = await fetch(
+          'http://localhost:5000/api/waste'
+        )
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+            'Failed to fetch collector data'
+          )
+        }
+
+        setWaste(result.wastes || [])
+
+      } catch (err) {
+        console.error(
+          'Fetch Collectors Error:',
+          err
+        )
+
+        setError(
+          err.message ||
+          'Unable to load collectors'
+        )
+      } finally {
+        setLoading(false)
+      }
     }
-  ]
 
-  const filteredCollectors = collectors.filter((collector) => {
-    const matchesSearch =
-      collector.name.toLowerCase().includes(search.toLowerCase()) ||
-      collector.id.toLowerCase().includes(search.toLowerCase()) ||
-      collector.location.toLowerCase().includes(search.toLowerCase())
+    fetchCollectors()
+  }, [])
 
-    const matchesStatus =
-      status === 'All' || collector.status === status
 
-    return matchesSearch && matchesStatus
-  })
+  /* -----------------------------
+     BUILD COLLECTORS FROM WASTE
+  ----------------------------- */
+
+  const collectors = useMemo(() => {
+    const collectorMap = {}
+
+    waste.forEach((item) => {
+      const name =
+        item.collectorName ||
+        'Unknown Collector'
+
+      if (!collectorMap[name]) {
+        collectorMap[name] = {
+          id: `COL-${String(
+            Object.keys(collectorMap).length + 1
+          ).padStart(4, '0')}`,
+
+          name,
+
+          phone: 'Not available',
+
+          location:
+            item.location ||
+            'N/A',
+
+          collections: 0,
+
+          waste: 0,
+
+          rating: '—',
+
+          status: 'Active',
+
+          joined:
+            item.createdAt
+              ? new Date(
+                  item.createdAt
+                ).toLocaleDateString(
+                  'en-IN',
+                  {
+                    month: 'short',
+                    year: 'numeric',
+                  }
+                )
+              : '—',
+        }
+      }
+
+      collectorMap[name].collections += 1
+
+      collectorMap[name].waste +=
+        Number(item.quantity) || 0
+
+      // Keep the latest known location
+      if (item.location) {
+        collectorMap[name].location =
+          item.location
+      }
+    })
+
+    return Object.values(
+      collectorMap
+    ).map((collector) => ({
+      ...collector,
+
+      waste:
+        `${collector.waste} units`,
+    }))
+
+  }, [waste])
+
+
+  /* -----------------------------
+     FILTER
+  ----------------------------- */
+
+  const filteredCollectors =
+    collectors.filter((collector) => {
+
+      const searchValue =
+        search.toLowerCase()
+
+      const matchesSearch =
+        collector.name
+          .toLowerCase()
+          .includes(searchValue) ||
+
+        collector.id
+          .toLowerCase()
+          .includes(searchValue) ||
+
+        collector.location
+          .toLowerCase()
+          .includes(searchValue)
+
+      const matchesStatus =
+        status === 'All' ||
+        collector.status === status
+
+      return (
+        matchesSearch &&
+        matchesStatus
+      )
+    })
+
+
+  /* -----------------------------
+     SUMMARY STATS
+  ----------------------------- */
+
+  const totalCollectors =
+    collectors.length
+
+  const activeCollectors =
+    collectors.filter(
+      (collector) =>
+        collector.status === 'Active'
+    ).length
+
+  const pendingCollectors =
+    collectors.filter(
+      (collector) =>
+        collector.status === 'Pending'
+    ).length
+
+  const totalWaste =
+    waste.reduce(
+      (total, item) =>
+        total +
+        (Number(item.quantity) || 0),
+      0
+    )
+
 
   return (
     <div className="management-page">
 
       <div className="page-title-row">
+
         <div>
-          <h2>Collectors</h2>
-          <p>Manage and monitor registered e-waste collectors</p>
+
+          <h2>
+            Collectors
+          </h2>
+
+          <p>
+            Manage and monitor registered
+            e-waste collectors
+          </p>
+
         </div>
 
         <button className="export-btn">
           ↓ Export Data
         </button>
+
       </div>
+
+
+      {/* ERROR */}
+
+      {error && (
+
+        <div className="offer-info">
+
+          <span>
+            ⚠️
+          </span>
+
+          <div>
+
+            <strong>
+              Unable to load collectors
+            </strong>
+
+            <p>
+              {error}
+            </p>
+
+          </div>
+
+        </div>
+
+      )}
+
 
       {/* SUMMARY */}
 
       <div className="management-stats">
 
         <div className="mini-stat">
-          <div className="mini-icon green">♻</div>
-          <div>
-            <span>Total Collectors</span>
-            <strong>1,248</strong>
+
+          <div className="mini-icon green">
+            ♻
           </div>
+
+          <div>
+
+            <span>
+              Total Collectors
+            </span>
+
+            <strong>
+              {loading
+                ? '—'
+                : totalCollectors}
+            </strong>
+
+          </div>
+
         </div>
 
-        <div className="mini-stat">
-          <div className="mini-icon blue">✓</div>
-          <div>
-            <span>Active</span>
-            <strong>1,126</strong>
-          </div>
-        </div>
 
         <div className="mini-stat">
-          <div className="mini-icon orange">!</div>
-          <div>
-            <span>Pending Verification</span>
-            <strong>78</strong>
+
+          <div className="mini-icon blue">
+            ✓
           </div>
+
+          <div>
+
+            <span>
+              Active
+            </span>
+
+            <strong>
+              {loading
+                ? '—'
+                : activeCollectors}
+            </strong>
+
+          </div>
+
         </div>
 
+
         <div className="mini-stat">
-          <div className="mini-icon purple">◈</div>
-          <div>
-            <span>E-Waste Collected</span>
-            <strong>18.6 T</strong>
+
+          <div className="mini-icon orange">
+            !
           </div>
+
+          <div>
+
+            <span>
+              Pending Verification
+            </span>
+
+            <strong>
+              {loading
+                ? '—'
+                : pendingCollectors}
+            </strong>
+
+          </div>
+
+        </div>
+
+
+        <div className="mini-stat">
+
+          <div className="mini-icon purple">
+            ◈
+          </div>
+
+          <div>
+
+            <span>
+              E-Waste Collected
+            </span>
+
+            <strong>
+              {loading
+                ? '—'
+                : `${totalWaste} units`}
+            </strong>
+
+          </div>
+
         </div>
 
       </div>
+
 
       {/* TABLE */}
 
@@ -144,110 +339,236 @@ function Collectors() {
         <div className="table-toolbar">
 
           <div className="search-box">
-            <span>⌕</span>
+
+            <span>
+              ⌕
+            </span>
 
             <input
               type="text"
               placeholder="Search collector, ID or location..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(e.target.value)
+              }
             />
+
           </div>
+
 
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) =>
+              setStatus(e.target.value)
+            }
           >
-            <option>All</option>
-            <option>Active</option>
-            <option>Pending</option>
-            <option>Inactive</option>
+
+            <option>
+              All
+            </option>
+
+            <option>
+              Active
+            </option>
+
+            <option>
+              Pending
+            </option>
+
+            <option>
+              Inactive
+            </option>
+
           </select>
 
         </div>
+
 
         <div className="table-wrapper">
 
           <table className="data-table">
 
             <thead>
+
               <tr>
-                <th>Collector</th>
-                <th>Location</th>
-                <th>Collections</th>
-                <th>E-Waste</th>
-                <th>Rating</th>
-                <th>Status</th>
-                <th>Joined</th>
-                <th>Action</th>
+
+                <th>
+                  Collector
+                </th>
+
+                <th>
+                  Location
+                </th>
+
+                <th>
+                  Collections
+                </th>
+
+                <th>
+                  E-Waste
+                </th>
+
+                <th>
+                  Rating
+                </th>
+
+                <th>
+                  Status
+                </th>
+
+                <th>
+                  Joined
+                </th>
+
+                <th>
+                  Action
+                </th>
+
               </tr>
+
             </thead>
+
 
             <tbody>
 
-              {filteredCollectors.map((collector) => (
+              {loading ? (
 
-                <tr key={collector.id}>
+                <tr>
 
-                  <td>
-                    <div className="person-cell">
-                      <div className="person-avatar">
-                        {collector.name.charAt(0)}
-                      </div>
-
-                      <div>
-                        <strong>{collector.name}</strong>
-                        <small>{collector.id}</small>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td>{collector.location}</td>
-
-                  <td>{collector.collections}</td>
-
-                  <td>{collector.waste}</td>
-
-                  <td>
-                    <span className="rating">
-                      ★ {collector.rating}
-                    </span>
-                  </td>
-
-                  <td>
-                    <span
-                      className={`status-badge ${collector.status.toLowerCase()}`}
-                    >
-                      {collector.status}
-                    </span>
-                  </td>
-
-                  <td>{collector.joined}</td>
-
-                  <td>
-                    <button className="action-btn">
-                      View
-                    </button>
+                  <td
+                    colSpan="8"
+                    style={{
+                      textAlign: 'center',
+                      padding: '30px',
+                    }}
+                  >
+                    Loading collectors...
                   </td>
 
                 </tr>
 
-              ))}
+              ) : (
+
+                filteredCollectors.map(
+                  (collector) => (
+
+                    <tr
+                      key={collector.id}
+                    >
+
+                      <td>
+
+                        <div className="person-cell">
+
+                          <div className="person-avatar">
+
+                            {collector.name
+                              .charAt(0)
+                              .toUpperCase()}
+
+                          </div>
+
+
+                          <div>
+
+                            <strong>
+                              {collector.name}
+                            </strong>
+
+                            <small>
+                              {collector.id}
+                            </small>
+
+                          </div>
+
+                        </div>
+
+                      </td>
+
+
+                      <td>
+                        {collector.location}
+                      </td>
+
+
+                      <td>
+                        {collector.collections}
+                      </td>
+
+
+                      <td>
+                        {collector.waste}
+                      </td>
+
+
+                      <td>
+
+                        <span className="rating">
+
+                          ★{' '}
+                          {collector.rating}
+
+                        </span>
+
+                      </td>
+
+
+                      <td>
+
+                        <span
+                          className={`status-badge ${collector.status.toLowerCase()}`}
+                        >
+                          {collector.status}
+                        </span>
+
+                      </td>
+
+
+                      <td>
+                        {collector.joined}
+                      </td>
+
+
+                      <td>
+
+                        <button className="action-btn">
+                          View
+                        </button>
+
+                      </td>
+
+                    </tr>
+
+                  )
+                )
+
+              )}
 
             </tbody>
 
           </table>
 
-          {filteredCollectors.length === 0 && (
-            <div className="empty-state">
-              No collectors found.
-            </div>
-          )}
+
+          {!loading &&
+            filteredCollectors.length === 0 && (
+
+              <div className="empty-state">
+                No collectors found.
+              </div>
+
+            )}
 
         </div>
 
+
         <div className="table-footer">
-          Showing {filteredCollectors.length} of {collectors.length} collectors
+
+          Showing{' '}
+          {filteredCollectors.length}{' '}
+          of{' '}
+          {collectors.length}{' '}
+          collectors
+
         </div>
 
       </div>

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 
 function Demands() {
@@ -7,116 +7,147 @@ function Demands() {
   const [category, setCategory] = useState('All')
   const [sortBy, setSortBy] = useState('Best Match')
 
-  // Temporary mock data
-  // Later this will come from backend + location matching service
-  const demands = [
-    {
-      id: 1,
-      recycler: 'EcoCycle Recycling',
-      material: 'Laptops',
-      category: 'Laptop',
-      quantity: 25,
-      location: 'Noida Sector 62',
-      distance: 4.2,
-      price: '₹450–₹650',
-      priceUnit: '/ unit',
-      deadline: '12 Sep 2026',
-      match: 94,
-      status: 'Open',
-    },
-    {
-      id: 2,
-      recycler: 'GreenTech Recyclers',
-      material: 'Desktop Computers',
-      category: 'Desktop',
-      quantity: 15,
-      location: 'Ghaziabad',
-      distance: 8.7,
-      price: '₹350–₹500',
-      priceUnit: '/ unit',
-      deadline: '15 Sep 2026',
-      match: 89,
-      status: 'Open',
-    },
-    {
-      id: 3,
-      recycler: 'Clean Earth Recycling',
-      material: 'Mobile Phones',
-      category: 'Mobile',
-      quantity: 40,
-      location: 'Delhi',
-      distance: 6.1,
-      price: '₹120–₹250',
-      priceUnit: '/ unit',
-      deadline: '18 Sep 2026',
-      match: 86,
-      status: 'Open',
-    },
-    {
-      id: 4,
-      recycler: 'GreenLoop India',
-      material: 'Printers',
-      category: 'Printer',
-      quantity: 10,
-      location: 'Faridabad',
-      distance: 12.3,
-      price: '₹300–₹450',
-      priceUnit: '/ unit',
-      deadline: '20 Sep 2026',
-      match: 78,
-      status: 'Open',
-    },
-    {
-      id: 5,
-      recycler: 'ReNew E-Waste Solutions',
-      material: 'LED Monitors',
-      category: 'Monitor',
-      quantity: 18,
-      location: 'Greater Noida',
-      distance: 15.4,
-      price: '₹250–₹400',
-      priceUnit: '/ unit',
-      deadline: '22 Sep 2026',
-      match: 75,
-      status: 'Open',
-    },
-    {
-      id: 6,
-      recycler: 'EcoRecover India',
-      material: 'UPS & Batteries',
-      category: 'Battery',
-      quantity: 30,
-      location: 'Delhi',
-      distance: 10.8,
-      price: '₹180–₹320',
-      priceUnit: '/ unit',
-      deadline: '24 Sep 2026',
-      match: 71,
-      status: 'Open',
-    },
-  ]
+  const [demands, setDemands] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+
+  // Fetch actual recycler demands from backend
+  useEffect(() => {
+
+    const fetchDemands = async () => {
+
+      try {
+
+        setLoading(true)
+        setError('')
+
+        const response = await fetch(
+          'http://localhost:5000/api/demands'
+        )
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || 'Failed to fetch demands'
+          )
+        }
+
+
+        const formattedDemands =
+          (result.demands || []).map((item) => ({
+
+            id: item._id,
+
+            // Recycler name is not stored in current backend model
+            recycler: 'Verified Recycler',
+
+            material: item.wasteType,
+
+            category: item.wasteType,
+
+            quantity: item.quantity,
+
+            location: item.location,
+
+            // Location matching is not implemented yet
+            distance: 0,
+
+            price:
+              item.minPrice !== undefined &&
+              item.maxPrice !== undefined
+                ? `₹${item.minPrice}–₹${item.maxPrice}`
+                : 'Price not specified',
+
+            priceUnit: '/ unit',
+
+            deadline: item.deadline
+              ? new Date(
+                  item.deadline
+                ).toLocaleDateString(
+                  'en-IN',
+                  {
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  }
+                )
+              : 'Not specified',
+
+            // Matching service is not implemented yet
+            match: 0,
+
+            status: 'Open',
+
+            condition:
+              item.condition || 'Any Condition',
+
+            description:
+              item.description || '',
+
+          }))
+
+
+        setDemands(formattedDemands)
+
+      } catch (err) {
+
+        console.error(
+          'Fetch Demands Error:',
+          err
+        )
+
+        setError(
+          err.message ||
+          'Unable to load demands'
+        )
+
+      } finally {
+
+        setLoading(false)
+
+      }
+
+    }
+
+
+    fetchDemands()
+
+  }, [])
 
 
   // Search + category filter
   const filteredDemands = demands
     .filter((demand) => {
 
+      const searchText =
+        search.toLowerCase()
+
       const matchesSearch =
         demand.material
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
+          ?.toLowerCase()
+          .includes(searchText) ||
+
         demand.recycler
-          .toLowerCase()
-          .includes(search.toLowerCase()) ||
+          ?.toLowerCase()
+          .includes(searchText) ||
+
         demand.location
-          .toLowerCase()
-          .includes(search.toLowerCase())
+          ?.toLowerCase()
+          .includes(searchText)
+
 
       const matchesCategory =
         category === 'All' ||
         demand.category === category
 
-      return matchesSearch && matchesCategory
+
+      return (
+        matchesSearch &&
+        matchesCategory
+      )
+
     })
     .sort((a, b) => {
 
@@ -129,11 +160,74 @@ function Demands() {
       }
 
       return 0
+
     })
 
 
+  // Loading state
+  if (loading) {
+
+    return (
+
+      <div className="demands-page">
+
+        <div className="no-demands">
+
+          <div>
+            ♻
+          </div>
+
+          <h2>
+            Loading demands...
+          </h2>
+
+          <p>
+            Fetching the latest recycler demands.
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
+  // Error state
+  if (error) {
+
+    return (
+
+      <div className="demands-page">
+
+        <div className="no-demands">
+
+          <div>
+            ⚠️
+          </div>
+
+          <h2>
+            Unable to load demands
+          </h2>
+
+          <p>
+            {error}
+          </p>
+
+        </div>
+
+      </div>
+
+    )
+
+  }
+
+
   return (
+
     <div className="demands-page">
+
 
       {/* ================================
           PAGE HEADER
@@ -142,6 +236,7 @@ function Demands() {
       <div className="demands-header">
 
         <div>
+
           <span className="page-label">
             COLLECTOR MARKETPLACE
           </span>
@@ -154,14 +249,24 @@ function Demands() {
             Find e-waste demands from verified recyclers
             near your location.
           </p>
+
         </div>
 
+
         <div className="demand-count">
-          <strong>{filteredDemands.length}</strong>
-          <span>matching demands</span>
+
+          <strong>
+            {filteredDemands.length}
+          </strong>
+
+          <span>
+            matching demands
+          </span>
+
         </div>
 
       </div>
+
 
 
       {/* ================================
@@ -170,50 +275,98 @@ function Demands() {
 
       <div className="demand-filters">
 
+
         {/* Search */}
 
         <div className="search-box">
 
-          <span>⌕</span>
+          <span>
+            ⌕
+          </span>
 
           <input
             type="text"
             placeholder="Search e-waste, recycler or location..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
           />
 
         </div>
+
 
 
         {/* Category */}
 
         <select
           value={category}
-          onChange={(e) => setCategory(e.target.value)}
+          onChange={(e) =>
+            setCategory(e.target.value)
+          }
         >
-          <option value="All">All Categories</option>
-          <option value="Laptop">Laptop</option>
-          <option value="Desktop">Desktop</option>
-          <option value="Mobile">Mobile</option>
-          <option value="Printer">Printer</option>
-          <option value="Monitor">Monitor</option>
-          <option value="Battery">Battery</option>
-          <option value="Other">Other</option>
+
+          <option value="All">
+            All Categories
+          </option>
+
+          <option value="Laptop">
+            Laptop
+          </option>
+
+          <option value="Desktop">
+            Desktop
+          </option>
+
+          <option value="Mobile">
+            Mobile
+          </option>
+
+          <option value="Printer">
+            Printer
+          </option>
+
+          <option value="Monitor">
+            Monitor
+          </option>
+
+          <option value="Battery">
+            Battery
+          </option>
+
+          <option value="PCB">
+            PCB
+          </option>
+
+          <option value="Other">
+            Other
+          </option>
+
         </select>
+
 
 
         {/* Sort */}
 
         <select
           value={sortBy}
-          onChange={(e) => setSortBy(e.target.value)}
+          onChange={(e) =>
+            setSortBy(e.target.value)
+          }
         >
-          <option value="Best Match">Best Match</option>
-          <option value="Nearest">Nearest First</option>
+
+          <option value="Best Match">
+            Best Match
+          </option>
+
+          <option value="Nearest">
+            Nearest First
+          </option>
+
         </select>
 
       </div>
+
 
 
       {/* ================================
@@ -223,11 +376,15 @@ function Demands() {
       <div className="location-notice">
 
         <div>
-          <strong>📍 Your location: Delhi NCR</strong>
+
+          <strong>
+            📍 Your location: Delhi NCR
+          </strong>
 
           <span>
             Showing demands within your nearby service area.
           </span>
+
         </div>
 
         <button>
@@ -237,11 +394,13 @@ function Demands() {
       </div>
 
 
+
       {/* ================================
           DEMANDS LIST
       ================================= */}
 
       <div className="demands-list">
+
 
         {filteredDemands.length > 0 ? (
 
@@ -251,6 +410,7 @@ function Demands() {
               className="demand-card"
               key={demand.id}
             >
+
 
               {/* Top */}
 
@@ -263,17 +423,22 @@ function Demands() {
                   </div>
 
                   <div>
-                    <h2>{demand.material}</h2>
+
+                    <h2>
+                      {demand.material}
+                    </h2>
 
                     <p>
                       {demand.recycler}
                     </p>
+
                   </div>
 
                 </div>
 
 
                 <div className="match-score">
+
                   <strong>
                     {demand.match}%
                   </strong>
@@ -281,52 +446,116 @@ function Demands() {
                   <span>
                     Match
                   </span>
+
                 </div>
 
               </div>
+
 
 
               {/* Details */}
 
               <div className="demand-card-details">
 
+
                 <div>
-                  <span>Quantity Required</span>
+
+                  <span>
+                    Quantity Required
+                  </span>
+
                   <strong>
                     {demand.quantity} units
                   </strong>
+
                 </div>
 
+
                 <div>
-                  <span>Location</span>
+
+                  <span>
+                    Location
+                  </span>
+
                   <strong>
                     {demand.location}
                   </strong>
+
                 </div>
 
+
                 <div>
-                  <span>Distance</span>
+
+                  <span>
+                    Distance
+                  </span>
+
                   <strong>
-                    {demand.distance} km
+                    {demand.distance > 0
+                      ? `${demand.distance} km`
+                      : 'Not available'}
                   </strong>
+
                 </div>
 
+
                 <div>
-                  <span>Expected Price</span>
+
+                  <span>
+                    Expected Price
+                  </span>
+
                   <strong className="price">
+
                     {demand.price}
-                    <small>{demand.priceUnit}</small>
+
+                    <small>
+                      {demand.priceUnit}
+                    </small>
+
                   </strong>
+
                 </div>
 
+
                 <div>
-                  <span>Deadline</span>
+
+                  <span>
+                    Deadline
+                  </span>
+
                   <strong>
                     {demand.deadline}
                   </strong>
+
                 </div>
 
               </div>
+
+
+
+              {/* Condition */}
+
+              {demand.condition && (
+
+                <div
+                  style={{
+                    marginTop: '12px',
+                    fontSize: '13px',
+                    color: '#668078',
+                  }}
+                >
+
+                  Preferred condition:{' '}
+
+                  <strong>
+                    {demand.condition}
+                  </strong>
+
+                </div>
+
+              )}
+
 
 
               {/* Bottom */}
@@ -334,8 +563,11 @@ function Demands() {
               <div className="demand-card-bottom">
 
                 <span className="open-status">
+
                   ● {demand.status}
+
                 </span>
+
 
                 <Link
                   to={`/demands/${demand.id}`}
@@ -372,6 +604,7 @@ function Demands() {
       </div>
 
     </div>
+
   )
 }
 

@@ -1,10 +1,23 @@
-import { useState } from 'react'
-import { Link, useLocation, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import {
+  Link,
+  useLocation,
+  useNavigate,
+} from 'react-router-dom'
 
 function AddEwaste() {
-
   const navigate = useNavigate()
   const location = useLocation()
+
+  // Demand ID coming from:
+  // /add-ewaste?demand=DEMAND_ID
+  const queryParams = new URLSearchParams(
+    location.search
+  )
+
+  const selectedDemandId =
+    queryParams.get('demand')
+
 
   const [formData, setFormData] = useState({
     demand: '',
@@ -17,34 +30,121 @@ function AddEwaste() {
     description: '',
   })
 
+
+  const [demands, setDemands] = useState([])
   const [images, setImages] = useState([])
 
-  const demands = [
-    {
-      id: 1,
-      label: 'Laptops — EcoCycle Recycling',
-      category: 'Laptop',
-    },
-    {
-      id: 2,
-      label: 'Desktop Computers — GreenTech Recyclers',
-      category: 'Desktop',
-    },
-    {
-      id: 3,
-      label: 'Mobile Phones — Clean Earth Recycling',
-      category: 'Mobile',
-    },
-    {
-      id: 4,
-      label: 'Printers — GreenLoop India',
-      category: 'Printer',
-    },
-  ]
+  const [loadingDemands, setLoadingDemands] =
+    useState(true)
 
+  const [submitting, setSubmitting] =
+    useState(false)
+
+  const [error, setError] = useState('')
+
+
+  // =================================
+  // FETCH DEMANDS
+  // =================================
+
+  useEffect(() => {
+    const fetchDemands = async () => {
+      try {
+        setLoadingDemands(true)
+        setError('')
+
+        const response = await fetch(
+          'http://localhost:5000/api/demands'
+        )
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message ||
+              'Failed to fetch demands'
+          )
+        }
+
+        const backendDemands =
+          result.demands || []
+
+        setDemands(backendDemands)
+
+        // ---------------------------------
+        // AUTO SELECT DEMAND FROM URL
+        // ---------------------------------
+
+        if (selectedDemandId) {
+          const selectedDemand =
+            backendDemands.find(
+              (demand) =>
+                String(demand._id) ===
+                String(selectedDemandId)
+            )
+
+          if (selectedDemand) {
+
+            const isExpired =
+              selectedDemand.deadline &&
+              new Date(
+                selectedDemand.deadline
+              ) < new Date()
+
+            if (!isExpired) {
+
+              setFormData((previous) => ({
+                ...previous,
+
+                demand:
+                  selectedDemand._id,
+
+                category:
+                  selectedDemand.wasteType || '',
+
+                location:
+                  selectedDemand.location ||
+                  'Delhi NCR',
+              }))
+
+            } else {
+
+              setError(
+                'This demand has expired.'
+              )
+
+            }
+          }
+        }
+
+      } catch (err) {
+        console.error(
+          'Fetch Demands Error:',
+          err
+        )
+
+        setError(
+          err.message ||
+            'Failed to load demands'
+        )
+      } finally {
+        setLoadingDemands(false)
+      }
+    }
+
+    fetchDemands()
+  }, [selectedDemandId])
+
+
+  // =================================
+  // FORM CHANGE
+  // =================================
 
   const handleChange = (e) => {
-    const { name, value } = e.target
+    const {
+      name,
+      value,
+    } = e.target
 
     setFormData((previous) => ({
       ...previous,
@@ -53,51 +153,243 @@ function AddEwaste() {
   }
 
 
+  // =================================
+  // DEMAND CHANGE
+  // =================================
+
   const handleDemandChange = (e) => {
-    const selectedDemand = demands.find(
-      (demand) => demand.id === Number(e.target.value)
-    )
+
+    const demandId =
+      e.target.value
+
+    const selectedDemand =
+      demands.find(
+        (demand) =>
+          String(demand._id) ===
+          String(demandId)
+      )
+
+    if (!selectedDemand) {
+      setFormData((previous) => ({
+        ...previous,
+        demand: '',
+        category: '',
+      }))
+
+      return
+    }
+
+
+    const isExpired =
+      selectedDemand.deadline &&
+      new Date(
+        selectedDemand.deadline
+      ) < new Date()
+
+
+    if (isExpired) {
+      alert(
+        'This demand has expired.'
+      )
+
+      return
+    }
+
 
     setFormData((previous) => ({
       ...previous,
-      demand: e.target.value,
-      category: selectedDemand
-        ? selectedDemand.category
-        : '',
+
+      demand: demandId,
+
+      category:
+        selectedDemand.wasteType || '',
+
+      location:
+        selectedDemand.location ||
+        previous.location,
     }))
   }
 
 
+  // =================================
+  // IMAGE CHANGE
+  // =================================
+
   const handleImages = (e) => {
-    const selectedFiles = Array.from(e.target.files)
+
+    const selectedFiles =
+      Array.from(e.target.files)
 
     setImages(selectedFiles)
   }
 
 
-  const handleSubmit = (e) => {
+  // =================================
+  // SUBMIT
+  // =================================
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
-    const submission = {
-      ...formData,
-      images,
-      submittedAt: new Date().toISOString(),
+    if (images.length === 0) {
+      alert(
+        'Please upload at least one image.'
+      )
+      return
     }
 
-    console.log('E-Waste Submission:', submission)
 
-    // Later:
-    // 1. Send data to backend
-    // 2. Backend stores submission
-    // 3. AI service assesses repairability
-    // 4. Collector receives assessment
+    if (!formData.demand) {
+      alert(
+        'Please select a recycler demand.'
+      )
+      return
+    }
 
-    navigate('/ai-assessment')
+
+    try {
+
+      setSubmitting(true)
+
+
+      const data = new FormData()
+
+
+      // Backend Waste API fields
+
+      data.append(
+        'wasteType',
+        formData.category
+      )
+
+      data.append(
+        'quantity',
+        formData.quantity
+      )
+
+      data.append(
+        'location',
+        formData.location
+      )
+
+      data.append(
+        'condition',
+        formData.condition
+      )
+
+
+      // ---------------------------------
+      // COLLECTOR LOGIN
+      // ---------------------------------
+
+      const user = JSON.parse(
+        localStorage.getItem('user') ||
+          'null'
+      )
+
+
+      if (
+        !user ||
+        user.role !== 'collector'
+      ) {
+        alert(
+          'Collector login not found.'
+        )
+
+        setSubmitting(false)
+
+        return
+      }
+
+
+      data.append(
+        'collectorName',
+        user.name
+      )
+
+
+      // ---------------------------------
+      // IMAGE
+      // ---------------------------------
+
+      data.append(
+        'image',
+        images[0]
+      )
+
+
+      // ---------------------------------
+      // BACKEND REQUEST
+      // ---------------------------------
+
+      const response = await fetch(
+        'http://localhost:5000/api/waste',
+        {
+          method: 'POST',
+          body: data,
+        }
+      )
+
+
+      const result =
+        await response.json()
+
+
+      if (!response.ok) {
+        throw new Error(
+          result.message ||
+            'Failed to submit e-waste'
+        )
+      }
+
+
+      console.log(
+        'AI Assessment Result:',
+        result
+      )
+
+
+      // ---------------------------------
+      // AI ASSESSMENT
+      // ---------------------------------
+
+      navigate(
+        '/ai-assessment',
+        {
+          state: {
+            waste: result.waste,
+
+            // Demand bhi next page ko
+            // available rahegi
+            demandId:
+              formData.demand,
+          },
+        }
+      )
+
+    } catch (error) {
+
+      console.error(
+        'E-Waste Submission Error:',
+        error
+      )
+
+      alert(
+        error.message ||
+          'Something went wrong while submitting e-waste.'
+      )
+
+    } finally {
+
+      setSubmitting(false)
+
+    }
   }
 
 
   return (
     <div className="add-ewaste-page">
+
 
       {/* =================================
           HEADER
@@ -114,17 +406,21 @@ function AddEwaste() {
             ← Back to Demands
           </Link>
 
+
           <span className="page-label">
             E-WASTE SUBMISSION
           </span>
+
 
           <h1>
             Add E-Waste
           </h1>
 
+
           <p>
-            Add the e-waste you have collected and submit it
-            for AI assessment and recycler matching.
+            Add the e-waste you have collected and
+            submit it for AI assessment and recycler
+            matching.
           </p>
 
         </div>
@@ -141,6 +437,7 @@ function AddEwaste() {
         onSubmit={handleSubmit}
       >
 
+
         {/* =================================
             DEMAND SELECTION
         ================================= */}
@@ -154,13 +451,16 @@ function AddEwaste() {
             </span>
 
             <div>
+
               <h2>
                 Select Recycler Demand
               </h2>
 
               <p>
-                Choose the demand this e-waste is intended for.
+                Choose the demand this e-waste is
+                intended for.
               </p>
+
             </div>
 
           </div>
@@ -173,29 +473,73 @@ function AddEwaste() {
               <span>*</span>
             </label>
 
-            <select
-              name="demand"
-              value={formData.demand}
-              onChange={handleDemandChange}
-              required
-            >
 
-              <option value="">
-                Select a nearby demand
-              </option>
+            {loadingDemands ? (
 
-              {demands.map((demand) => (
-                <option
-                  key={demand.id}
-                  value={demand.id}
-                >
-                  {demand.label}
+              <p>
+                Loading available demands...
+              </p>
+
+            ) : (
+
+              <select
+                name="demand"
+                value={formData.demand}
+                onChange={
+                  handleDemandChange
+                }
+                required
+              >
+
+                <option value="">
+                  Select a nearby demand
                 </option>
-              ))}
 
-            </select>
+
+                {demands.map((demand) => {
+
+                  const expired =
+                    demand.deadline &&
+                    new Date(
+                      demand.deadline
+                    ) < new Date()
+
+
+                  return (
+                    <option
+                      key={demand._id}
+                      value={demand._id}
+                      disabled={expired}
+                    >
+                      {demand.wasteType ||
+                        'E-Waste'}{' '}
+                      —{' '}
+                      {demand.location ||
+                        'Location unavailable'}
+                      {expired
+                        ? ' — Expired'
+                        : ''}
+                    </option>
+                  )
+                })}
+
+              </select>
+
+            )}
 
           </div>
+
+
+          {error && (
+            <p
+              style={{
+                color: '#c0392b',
+                marginTop: '10px',
+              }}
+            >
+              {error}
+            </p>
+          )}
 
         </section>
 
@@ -213,13 +557,16 @@ function AddEwaste() {
             </span>
 
             <div>
+
               <h2>
                 E-Waste Details
               </h2>
 
               <p>
-                Tell us about the electronic items you collected.
+                Tell us about the electronic items
+                you collected.
               </p>
+
             </div>
 
           </div>
@@ -227,12 +574,16 @@ function AddEwaste() {
 
           <div className="form-grid">
 
+
+            {/* CATEGORY */}
+
             <div className="form-group">
 
               <label>
                 E-Waste Category
                 <span>*</span>
               </label>
+
 
               <select
                 name="category"
@@ -278,6 +629,8 @@ function AddEwaste() {
             </div>
 
 
+            {/* DEVICE NAME */}
+
             <div className="form-group">
 
               <label>
@@ -296,6 +649,8 @@ function AddEwaste() {
 
             </div>
 
+
+            {/* QUANTITY */}
 
             <div className="form-group">
 
@@ -317,6 +672,8 @@ function AddEwaste() {
             </div>
 
 
+            {/* WEIGHT */}
+
             <div className="form-group">
 
               <label>
@@ -337,7 +694,9 @@ function AddEwaste() {
                   required
                 />
 
-                <span>kg</span>
+                <span>
+                  kg
+                </span>
 
               </div>
 
@@ -367,7 +726,8 @@ function AddEwaste() {
               </h2>
 
               <p>
-                This helps our AI estimate repairability and value.
+                This helps our AI estimate repairability
+                and value.
               </p>
 
             </div>
@@ -377,18 +737,23 @@ function AddEwaste() {
 
           <div className="condition-options">
 
+
             <label className="condition-option">
 
               <input
                 type="radio"
                 name="condition"
                 value="Working"
-                checked={formData.condition === 'Working'}
+                checked={
+                  formData.condition ===
+                  'Working'
+                }
                 onChange={handleChange}
                 required
               />
 
               <div>
+
                 <strong>
                   Working
                 </strong>
@@ -396,6 +761,7 @@ function AddEwaste() {
                 <span>
                   Fully functional device
                 </span>
+
               </div>
 
             </label>
@@ -407,11 +773,15 @@ function AddEwaste() {
                 type="radio"
                 name="condition"
                 value="Partially Working"
-                checked={formData.condition === 'Partially Working'}
+                checked={
+                  formData.condition ===
+                  'Partially Working'
+                }
                 onChange={handleChange}
               />
 
               <div>
+
                 <strong>
                   Partially Working
                 </strong>
@@ -419,6 +789,7 @@ function AddEwaste() {
                 <span>
                   Some functions work
                 </span>
+
               </div>
 
             </label>
@@ -430,11 +801,15 @@ function AddEwaste() {
                 type="radio"
                 name="condition"
                 value="Not Working"
-                checked={formData.condition === 'Not Working'}
+                checked={
+                  formData.condition ===
+                  'Not Working'
+                }
                 onChange={handleChange}
               />
 
               <div>
+
                 <strong>
                   Not Working
                 </strong>
@@ -442,6 +817,7 @@ function AddEwaste() {
                 <span>
                   Device does not function
                 </span>
+
               </div>
 
             </label>
@@ -453,11 +829,15 @@ function AddEwaste() {
                 type="radio"
                 name="condition"
                 value="Unknown"
-                checked={formData.condition === 'Unknown'}
+                checked={
+                  formData.condition ===
+                  'Unknown'
+                }
                 onChange={handleChange}
               />
 
               <div>
+
                 <strong>
                   Not Sure
                 </strong>
@@ -465,6 +845,7 @@ function AddEwaste() {
                 <span>
                   Let AI assess the condition
                 </span>
+
               </div>
 
             </label>
@@ -493,7 +874,8 @@ function AddEwaste() {
               </h2>
 
               <p>
-                Add clear photos so AI can assess the device condition.
+                Add clear photos so AI can assess
+                the device condition.
               </p>
 
             </div>
@@ -531,16 +913,22 @@ function AddEwaste() {
 
               <strong>
                 {images.length} photo
-                {images.length > 1 ? 's' : ''} selected
+                {images.length > 1
+                  ? 's'
+                  : ''}{' '}
+                selected
               </strong>
 
-              {images.map((image, index) => (
 
-                <span key={index}>
-                  {image.name}
-                </span>
+              {images.map(
+                (image, index) => (
 
-              ))}
+                  <span key={index}>
+                    {image.name}
+                  </span>
+
+                )
+              )}
 
             </div>
 
@@ -568,7 +956,8 @@ function AddEwaste() {
               </h2>
 
               <p>
-                Add any useful details about this collection.
+                Add any useful details about this
+                collection.
               </p>
 
             </div>
@@ -577,6 +966,7 @@ function AddEwaste() {
 
 
           <div className="form-grid">
+
 
             <div className="form-group">
 
@@ -628,11 +1018,17 @@ function AddEwaste() {
             Cancel
           </Link>
 
+
           <button
             type="submit"
             className="submit-ewaste-button"
+            disabled={submitting}
           >
-            Submit for AI Assessment →
+
+            {submitting
+              ? 'Submitting...'
+              : 'Submit for AI Assessment →'}
+
           </button>
 
         </div>

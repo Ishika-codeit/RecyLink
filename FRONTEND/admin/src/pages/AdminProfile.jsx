@@ -2,28 +2,51 @@ import { useState } from 'react'
 
 function AdminProfile() {
   const [activeTab, setActiveTab] = useState('profile')
-
-  const [admin, setAdmin] = useState({
-    name: 'Admin',
-    email: 'admin@recyLink.com',
-    phone: '+91 98XXXXXX10',
-    role: 'System Administrator',
-    organization: 'RecyLink',
-    joined: 'January 2026'
-  })
-
   const [editing, setEditing] = useState(false)
+
+  const savedAdmin = JSON.parse(
+    localStorage.getItem('adminProfile') || 'null'
+  )
+
+  const [admin, setAdmin] = useState(
+    savedAdmin || {
+      name: 'Admin',
+      email: 'admin@recyLink.com',
+      phone: '',
+      role: 'System Administrator',
+      organization: 'RecyLink',
+      joined: 'January 2026',
+    }
+  )
 
   const handleChange = (e) => {
     setAdmin({
       ...admin,
-      [e.target.name]: e.target.value
+      [e.target.name]: e.target.value,
     })
   }
 
   const handleSave = () => {
+    localStorage.setItem(
+      'adminProfile',
+      JSON.stringify(admin)
+    )
+
     setEditing(false)
+
     alert('Profile updated successfully!')
+  }
+
+  const getInitials = (name) => {
+    if (!name) return 'A'
+
+    return name
+      .trim()
+      .split(' ')
+      .map((word) => word[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase()
   }
 
   return (
@@ -32,9 +55,13 @@ function AdminProfile() {
       {/* HEADER */}
 
       <div className="page-title-row">
+
         <div>
           <h2>Admin Profile</h2>
-          <p>Manage your administrator account and settings</p>
+
+          <p>
+            Manage your administrator account and settings
+          </p>
         </div>
 
         {activeTab === 'profile' && (
@@ -45,56 +72,92 @@ function AdminProfile() {
             {editing ? 'Cancel' : 'Edit Profile'}
           </button>
         )}
+
       </div>
+
 
       {/* PROFILE HEADER */}
 
       <div className="admin-profile-header">
 
         <div className="admin-large-avatar">
-          A
+          {getInitials(admin.name)}
         </div>
 
         <div className="admin-profile-info">
+
           <div className="admin-name-row">
-            <h2>{admin.name}</h2>
+
+            <h2>
+              {admin.name}
+            </h2>
+
             <span className="verified-badge">
-              ✓ Verified
+              ✓ Administrator
             </span>
+
           </div>
 
-          <p>{admin.role}</p>
-          <span>RecyLink Administration</span>
+          <p>
+            {admin.role}
+          </p>
+
+          <span>
+            {admin.organization} Administration
+          </span>
+
         </div>
 
       </div>
+
 
       {/* TABS */}
 
       <div className="profile-tabs">
 
         <button
-          className={activeTab === 'profile' ? 'active' : ''}
-          onClick={() => setActiveTab('profile')}
+          className={
+            activeTab === 'profile'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('profile')
+          }
         >
           Profile Information
         </button>
 
+
         <button
-          className={activeTab === 'security' ? 'active' : ''}
-          onClick={() => setActiveTab('security')}
+          className={
+            activeTab === 'security'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('security')
+          }
         >
           Security
         </button>
 
+
         <button
-          className={activeTab === 'activity' ? 'active' : ''}
-          onClick={() => setActiveTab('activity')}
+          className={
+            activeTab === 'activity'
+              ? 'active'
+              : ''
+          }
+          onClick={() =>
+            setActiveTab('activity')
+          }
         >
           Recent Activity
         </button>
 
       </div>
+
 
       {/* PROFILE INFORMATION */}
 
@@ -103,100 +166,171 @@ function AdminProfile() {
         <div className="profile-content-card">
 
           <div className="profile-section-title">
-            <h3>Personal Information</h3>
-            <p>Basic administrator account details</p>
+
+            <h3>
+              Personal Information
+            </h3>
+
+            <p>
+              Basic administrator account details
+            </p>
+
           </div>
+
 
           <div className="profile-form-grid">
 
+            {/* NAME */}
+
             <div className="profile-field">
-              <label>Full Name</label>
+
+              <label>
+                Full Name
+              </label>
 
               {editing ? (
+
                 <input
                   name="name"
                   value={admin.name}
                   onChange={handleChange}
                 />
+
               ) : (
+
                 <div className="profile-value">
                   {admin.name}
                 </div>
+
               )}
+
             </div>
 
+
+            {/* EMAIL */}
+
             <div className="profile-field">
-              <label>Email Address</label>
+
+              <label>
+                Email Address
+              </label>
 
               {editing ? (
+
                 <input
+                  type="email"
                   name="email"
                   value={admin.email}
                   onChange={handleChange}
                 />
+
               ) : (
+
                 <div className="profile-value">
                   {admin.email}
                 </div>
+
               )}
+
             </div>
 
+
+            {/* PHONE */}
+
             <div className="profile-field">
-              <label>Phone Number</label>
+
+              <label>
+                Phone Number
+              </label>
 
               {editing ? (
+
                 <input
                   name="phone"
+                  placeholder="Enter phone number"
                   value={admin.phone}
                   onChange={handleChange}
                 />
+
               ) : (
+
                 <div className="profile-value">
-                  {admin.phone}
+                  {admin.phone || 'Not provided'}
                 </div>
+
               )}
+
             </div>
 
+
+            {/* ROLE */}
+
             <div className="profile-field">
-              <label>Role</label>
+
+              <label>
+                Role
+              </label>
 
               <div className="profile-value">
                 {admin.role}
               </div>
+
             </div>
 
+
+            {/* ORGANIZATION */}
+
             <div className="profile-field">
-              <label>Organization</label>
+
+              <label>
+                Organization
+              </label>
 
               <div className="profile-value">
                 {admin.organization}
               </div>
+
             </div>
 
+
+            {/* JOINED */}
+
             <div className="profile-field">
-              <label>Member Since</label>
+
+              <label>
+                Member Since
+              </label>
 
               <div className="profile-value">
                 {admin.joined}
               </div>
+
             </div>
 
           </div>
 
+
+          {/* SAVE */}
+
           {editing && (
+
             <div className="profile-save-row">
+
               <button
                 className="save-profile-btn"
                 onClick={handleSave}
               >
                 Save Changes
               </button>
+
             </div>
+
           )}
 
         </div>
 
       )}
+
 
       {/* SECURITY */}
 
@@ -205,43 +339,107 @@ function AdminProfile() {
         <div className="profile-content-card">
 
           <div className="profile-section-title">
-            <h3>Account Security</h3>
-            <p>Manage your password and account security</p>
+
+            <h3>
+              Account Security
+            </h3>
+
+            <p>
+              Security controls available for the administrator account
+            </p>
+
           </div>
+
 
           <div className="security-list">
 
+            {/* PASSWORD */}
+
             <div className="security-item">
+
               <div>
-                <strong>Password</strong>
-                <span>Last changed 30 days ago</span>
+
+                <strong>
+                  Password
+                </strong>
+
+                <span>
+                  Password management is handled by the authentication system.
+                </span>
+
               </div>
 
-              <button className="outline-btn">
-                Change Password
+              <button
+                className="outline-btn"
+                onClick={() =>
+                  alert(
+                    'Password management will be connected when authentication APIs are added.'
+                  )
+                }
+              >
+                Manage
               </button>
+
             </div>
 
+
+            {/* 2FA */}
+
             <div className="security-item">
+
               <div>
-                <strong>Two-Factor Authentication</strong>
-                <span>Add an extra layer of account protection</span>
+
+                <strong>
+                  Two-Factor Authentication
+                </strong>
+
+                <span>
+                  Additional account protection.
+                </span>
+
               </div>
 
-              <button className="security-toggle">
-                Enable
+              <button
+                className="security-toggle"
+                onClick={() =>
+                  alert(
+                    'Two-factor authentication is not available in the current backend.'
+                  )
+                }
+              >
+                Not Available
               </button>
+
             </div>
 
+
+            {/* SESSIONS */}
+
             <div className="security-item">
+
               <div>
-                <strong>Login Sessions</strong>
-                <span>Manage devices currently signed in</span>
+
+                <strong>
+                  Login Sessions
+                </strong>
+
+                <span>
+                  Session management will be available with authentication APIs.
+                </span>
+
               </div>
 
-              <button className="outline-btn">
-                View Sessions
+              <button
+                className="outline-btn"
+                onClick={() =>
+                  alert(
+                    'Session management is not available in the current backend.'
+                  )
+                }
+              >
+                View
               </button>
+
             </div>
 
           </div>
@@ -250,6 +448,7 @@ function AdminProfile() {
 
       )}
 
+
       {/* ACTIVITY */}
 
       {activeTab === 'activity' && (
@@ -257,42 +456,93 @@ function AdminProfile() {
         <div className="profile-content-card">
 
           <div className="profile-section-title">
-            <h3>Recent Admin Activity</h3>
-            <p>Latest actions performed from this account</p>
+
+            <h3>
+              Recent Admin Activity
+            </h3>
+
+            <p>
+              Activity tracking available in the current prototype
+            </p>
+
           </div>
+
 
           <div className="admin-activity-list">
 
             <div className="admin-activity-item">
+
               <div className="activity-dot"></div>
+
               <div>
-                <strong>Verified GreenTech Recyclers</strong>
-                <span>Today · 10:42 AM</span>
+
+                <strong>
+                  Viewed platform reports
+                </strong>
+
+                <span>
+                  Current session
+                </span>
+
               </div>
+
             </div>
 
-            <div className="admin-activity-item">
-              <div className="activity-dot"></div>
-              <div>
-                <strong>Approved collector COL-1025</strong>
-                <span>Today · 09:18 AM</span>
-              </div>
-            </div>
 
             <div className="admin-activity-item">
+
               <div className="activity-dot"></div>
+
               <div>
-                <strong>Reviewed e-waste submission EW-2048</strong>
-                <span>Yesterday · 04:35 PM</span>
+
+                <strong>
+                  Reviewed e-waste submissions
+                </strong>
+
+                <span>
+                  Current session
+                </span>
+
               </div>
+
             </div>
 
+
             <div className="admin-activity-item">
+
               <div className="activity-dot"></div>
+
               <div>
-                <strong>Created platform report</strong>
-                <span>Yesterday · 02:10 PM</span>
+
+                <strong>
+                  Reviewed recycler demands
+                </strong>
+
+                <span>
+                  Current session
+                </span>
+
               </div>
+
+            </div>
+
+
+            <div className="admin-activity-item">
+
+              <div className="activity-dot"></div>
+
+              <div>
+
+                <strong>
+                  Checked collection activity
+                </strong>
+
+                <span>
+                  Current session
+                </span>
+
+              </div>
+
             </div>
 
           </div>

@@ -1,52 +1,146 @@
 import { Link, useParams } from 'react-router-dom'
+import { useEffect, useState } from 'react'
 
 function DemandDetails() {
-
   const { id } = useParams()
 
-  // Temporary mock data
-  // Later backend se specific demand fetch hogi
-  const demand = {
-    id,
-    recycler: 'EcoCycle Recycling',
-    verified: true,
+  const [demand, setDemand] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
 
-    material: 'Laptops',
-    category: 'Laptop',
+  useEffect(() => {
+    const fetchDemand = async () => {
+      try {
+        setLoading(true)
+        setError('')
 
-    quantity: 25,
-    price: '₹450–₹650',
-    priceUnit: 'per unit',
+        const response = await fetch(
+          'http://localhost:5000/api/demands'
+        )
 
-    location: 'Noida Sector 62',
-    distance: '4.2 km',
+        const result = await response.json()
 
-    deadline: '12 Sep 2026',
+        if (!response.ok) {
+          throw new Error(
+            result.message || 'Failed to fetch demands'
+          )
+        }
 
-    match: 94,
+        const foundDemand = (result.demands || []).find(
+          (item) => String(item._id) === String(id)
+        )
 
-    condition: 'Working / Non-working',
-    preferredCondition: 'Any condition',
+        if (!foundDemand) {
+          throw new Error('Demand not found')
+        }
 
-    pickup: 'Recycler pickup available',
+        setDemand(foundDemand)
+      } catch (err) {
+        console.error('Demand Details Error:', err)
+        setError(
+          err.message || 'Failed to load demand details'
+        )
+      } finally {
+        setLoading(false)
+      }
+    }
 
-    description:
-      'Looking for used and discarded laptops for responsible recycling and component recovery. Both working and non-working units are accepted.',
+    fetchDemand()
+  }, [id])
 
-    requirements: [
-      'Laptop should be complete with major components',
-      'Damaged or non-working devices are also accepted',
-      'Minimum quantity preferred: 5 units',
-      'Devices should be available for physical verification',
-    ],
 
-    recyclerDetails: {
-      name: 'EcoCycle Recycling',
-      location: 'Noida, Uttar Pradesh',
-      rating: '4.8 / 5',
-      completed: 126,
-    },
+  // -----------------------------------
+  // LOADING
+  // -----------------------------------
+
+  if (loading) {
+    return (
+      <div className="demand-details-page">
+        <div className="detail-card">
+          <p>Loading demand details...</p>
+        </div>
+      </div>
+    )
   }
+
+
+  // -----------------------------------
+  // ERROR
+  // -----------------------------------
+
+  if (error || !demand) {
+    return (
+      <div className="demand-details-page">
+
+        <Link
+          to="/demands"
+          className="back-link"
+        >
+          ← Back to Nearby Demands
+        </Link>
+
+        <div className="detail-card">
+          <h2>Demand Not Found</h2>
+
+          <p className="detail-description">
+            {error || 'This demand could not be found.'}
+          </p>
+        </div>
+
+      </div>
+    )
+  }
+
+
+  // -----------------------------------
+  // DYNAMIC VALUES
+  // -----------------------------------
+
+  const category =
+    demand.wasteType || 'E-Waste'
+
+  const quantity =
+    Number(demand.quantity || 0)
+
+  const price =
+    demand.minPrice !== undefined &&
+    demand.maxPrice !== undefined
+      ? `₹${Number(demand.minPrice).toLocaleString(
+          'en-IN'
+        )}–₹${Number(demand.maxPrice).toLocaleString(
+          'en-IN'
+        )}`
+      : 'Price not specified'
+
+  const priceUnit = 'per unit'
+
+  const deadline = demand.deadline
+    ? new Date(demand.deadline).toLocaleDateString(
+        'en-IN',
+        {
+          day: '2-digit',
+          month: 'short',
+          year: 'numeric',
+        }
+      )
+    : 'Not specified'
+
+  const condition =
+    demand.condition || 'Any Condition'
+
+  const description =
+    demand.description ||
+    'No additional description provided by the recycler.'
+
+  const requirements = [
+    `Required quantity: ${quantity} units`,
+    `Preferred condition: ${condition}`,
+    'Devices may be subject to physical verification',
+  ]
+
+  const isExpired = demand.deadline
+    ? new Date(demand.deadline) < new Date()
+    : false
 
 
   return (
@@ -77,16 +171,14 @@ function DemandDetails() {
           </span>
 
           <h1>
-            {demand.material}
+            {category}
           </h1>
 
           <p>
-            {demand.recycler}
-            {demand.verified && (
-              <span className="verified-badge">
-                ✓ Verified Recycler
-              </span>
-            )}
+            Verified Recycler
+            <span className="verified-badge">
+              ✓ Demand
+            </span>
           </p>
 
         </div>
@@ -95,7 +187,7 @@ function DemandDetails() {
         <div className="match-badge">
 
           <strong>
-            {demand.match}%
+            —
           </strong>
 
           <span>
@@ -119,7 +211,7 @@ function DemandDetails() {
         <div className="demand-detail-main">
 
 
-          {/* Key information */}
+          {/* Demand Information */}
 
           <section className="detail-card">
 
@@ -131,45 +223,89 @@ function DemandDetails() {
 
               <div>
                 <span>Category</span>
-                <strong>{demand.category}</strong>
+
+                <strong>
+                  {category}
+                </strong>
               </div>
+
 
               <div>
                 <span>Quantity Required</span>
-                <strong>{demand.quantity} units</strong>
+
+                <strong>
+                  {quantity} units
+                </strong>
               </div>
+
 
               <div>
                 <span>Expected Price</span>
+
                 <strong className="green-text">
-                  {demand.price}
+                  {price}
                 </strong>
-                <small>{demand.priceUnit}</small>
+
+                <small>
+                  {priceUnit}
+                </small>
               </div>
+
 
               <div>
                 <span>Deadline</span>
-                <strong>{demand.deadline}</strong>
+
+                <strong>
+                  {deadline}
+                </strong>
               </div>
+
 
               <div>
                 <span>Location</span>
-                <strong>{demand.location}</strong>
+
+                <strong>
+                  {demand.location || 'Not specified'}
+                </strong>
               </div>
+
 
               <div>
                 <span>Distance</span>
-                <strong>{demand.distance}</strong>
+
+                <strong>
+                  —
+                </strong>
+
+                <small>
+                  Location matching not available
+                </small>
               </div>
+
 
               <div>
                 <span>Condition</span>
-                <strong>{demand.preferredCondition}</strong>
+
+                <strong>
+                  {condition}
+                </strong>
               </div>
 
+
               <div>
-                <span>Pickup</span>
-                <strong>{demand.pickup}</strong>
+                <span>Status</span>
+
+                <strong
+                  className={
+                    isExpired
+                      ? ''
+                      : 'green-text'
+                  }
+                >
+                  {isExpired
+                    ? 'Expired'
+                    : 'Open'}
+                </strong>
               </div>
 
             </div>
@@ -186,7 +322,7 @@ function DemandDetails() {
             </h2>
 
             <p className="detail-description">
-              {demand.description}
+              {description}
             </p>
 
           </section>
@@ -202,12 +338,19 @@ function DemandDetails() {
 
             <ul className="requirements-list">
 
-              {demand.requirements.map(
+              {requirements.map(
                 (requirement, index) => (
+
                   <li key={index}>
-                    <span>✓</span>
+
+                    <span>
+                      ✓
+                    </span>
+
                     {requirement}
+
                   </li>
+
                 )
               )}
 
@@ -232,11 +375,11 @@ function DemandDetails() {
             </span>
 
             <strong className="action-price">
-              {demand.price}
+              {price}
             </strong>
 
             <span className="action-unit">
-              {demand.priceUnit}
+              {priceUnit}
             </span>
 
 
@@ -244,29 +387,64 @@ function DemandDetails() {
 
 
             <div className="action-row">
-              <span>Quantity</span>
+
+              <span>
+                Quantity
+              </span>
+
               <strong>
-                {demand.quantity} units
+                {quantity} units
               </strong>
+
             </div>
+
 
             <div className="action-row">
-              <span>Deadline</span>
+
+              <span>
+                Deadline
+              </span>
+
               <strong>
-                {demand.deadline}
+                {deadline}
               </strong>
+
             </div>
 
 
-            <Link
-              to="/add-ewaste"
-              className="primary-action"
+            {isExpired ? (
+
+              <button
+                className="primary-action"
+                disabled
+                style={{
+                  opacity: 0.55,
+                  cursor: 'not-allowed',
+                }}
+              >
+                Demand Expired
+              </button>
+
+            ) : (
+
+              <Link
+                to={`/add-ewaste?demand=${demand._id}`}
+                className="primary-action"
+              >
+                Add E-Waste for This Demand →
+              </Link>
+
+            )}
+
+
+            <button
+              className="secondary-action"
+              onClick={() =>
+                alert(
+                  'Save Demand will be connected with user preferences later.'
+                )
+              }
             >
-              Add E-Waste for This Demand →
-            </Link>
-
-
-            <button className="secondary-action">
               ♡ Save Demand
             </button>
 
@@ -286,14 +464,20 @@ function DemandDetails() {
             </div>
 
             <strong>
-              {demand.location}
+              {demand.location || 'Not specified'}
             </strong>
 
             <span>
-              {demand.distance} from your location
+              Exact distance is not available
             </span>
 
-            <button>
+            <button
+              onClick={() =>
+                alert(
+                  'Map integration will be added with location matching.'
+                )
+              }
+            >
               View on Map
             </button>
 
@@ -311,35 +495,49 @@ function DemandDetails() {
             <div className="recycler-profile">
 
               <div className="recycler-avatar">
-                E
+                R
               </div>
 
               <div>
+
                 <strong>
-                  {demand.recyclerDetails.name}
+                  Verified Recycler
                 </strong>
 
                 <span>
-                  ✓ Verified Recycler
+                  ✓ Demand posted
                 </span>
+
               </div>
 
             </div>
 
+
             <div className="recycler-stats">
 
               <div>
+
                 <strong>
-                  {demand.recyclerDetails.rating}
+                  —
                 </strong>
-                <span>Rating</span>
+
+                <span>
+                  Rating
+                </span>
+
               </div>
 
+
               <div>
+
                 <strong>
-                  {demand.recyclerDetails.completed}
+                  —
                 </strong>
-                <span>Collections</span>
+
+                <span>
+                  Collections
+                </span>
+
               </div>
 
             </div>

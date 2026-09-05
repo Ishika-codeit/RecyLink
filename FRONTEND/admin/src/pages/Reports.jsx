@@ -1,28 +1,384 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 
 function Reports() {
   const [period, setPeriod] = useState('This Year')
 
-  const monthlyData = [
-    { month: 'Jan', collections: 210, waste: 980 },
-    { month: 'Feb', collections: 260, waste: 1180 },
-    { month: 'Mar', collections: 310, waste: 1420 },
-    { month: 'Apr', collections: 285, waste: 1290 },
-    { month: 'May', collections: 340, waste: 1580 },
-    { month: 'Jun', collections: 375, waste: 1720 },
-    { month: 'Jul', collections: 410, waste: 1890 },
-    { month: 'Aug', collections: 452, waste: 2140 },
-    { month: 'Sep', collections: 398, waste: 1860 },
-  ]
+  const [wastes, setWastes] = useState([])
+  const [demands, setDemands] = useState([])
+  const [quotes, setQuotes] = useState([])
 
-  const categoryData = [
-    { name: 'Laptops', value: 28 },
-    { name: 'Mobile Phones', value: 24 },
-    { name: 'Desktop Computers', value: 18 },
-    { name: 'Printers', value: 12 },
-    { name: 'Monitors', value: 10 },
-    { name: 'Others', value: 8 }
-  ]
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchReportsData = async () => {
+      try {
+        setLoading(true)
+        setError('')
+
+        const [wasteRes, demandRes, quoteRes] = await Promise.all([
+          fetch('http://localhost:5000/api/waste'),
+          fetch('http://localhost:5000/api/demands'),
+          fetch('http://localhost:5000/api/quotes'),
+        ])
+
+        const wasteData = await wasteRes.json()
+        const demandData = await demandRes.json()
+        const quoteData = await quoteRes.json()
+
+        if (!wasteRes.ok) {
+          throw new Error(
+            wasteData.message || 'Failed to fetch e-waste data'
+          )
+        }
+
+        if (!demandRes.ok) {
+          throw new Error(
+            demandData.message || 'Failed to fetch demand data'
+          )
+        }
+
+        if (!quoteRes.ok) {
+          throw new Error(
+            quoteData.message || 'Failed to fetch quote data'
+          )
+        }
+
+        setWastes(wasteData.wastes || [])
+        setDemands(demandData.demands || [])
+        setQuotes(quoteData.quotes || [])
+      } catch (err) {
+        console.error('Reports Error:', err)
+        setError(err.message || 'Failed to load reports')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchReportsData()
+  }, [])
+
+  // -----------------------------------
+  // DATE FILTER
+  // -----------------------------------
+
+  const getPeriodStart = () => {
+    const now = new Date()
+
+    if (period === 'Last 30 Days') {
+      const date = new Date()
+      date.setDate(now.getDate() - 30)
+      return date
+    }
+
+    if (period === 'Last 6 Months') {
+      const date = new Date()
+      date.setMonth(now.getMonth() - 6)
+      return date
+    }
+
+    return new Date(now.getFullYear(), 0, 1)
+  }
+
+  const filteredWastes = useMemo(() => {
+    const startDate = getPeriodStart()
+
+    return wastes.filter((item) => {
+      const createdAt = new Date(item.createdAt)
+      return createdAt >= startDate
+    })
+  }, [wastes, period])
+
+  const filteredDemands = useMemo(() => {
+    const startDate = getPeriodStart()
+
+    return demands.filter((item) => {
+      const createdAt = new Date(item.createdAt)
+      return createdAt >= startDate
+    })
+  }, [demands, period])
+
+  const filteredQuotes = useMemo(() => {
+    const startDate = getPeriodStart()
+
+    return quotes.filter((item) => {
+      const createdAt = new Date(item.createdAt)
+      return createdAt >= startDate
+    })
+  }, [quotes, period])
+
+  // -----------------------------------
+  // KEY METRICS
+  // -----------------------------------
+
+  const totalWasteQuantity = useMemo(() => {
+    return filteredWastes.reduce(
+      (sum, item) => sum + Number(item.quantity || 0),
+      0
+    )
+  }, [filteredWastes])
+
+  const completedCollections = useMemo(() => {
+    return filteredQuotes.filter(
+      (quote) => quote.status === 'SELECTED'
+    ).length
+  }, [filteredQuotes])
+
+  const pendingOffers = useMemo(() => {
+    return filteredQuotes.filter(
+      (quote) => quote.status === 'PENDING'
+    ).length
+  }, [filteredQuotes])
+
+  const activeDemands = useMemo(() => {
+    const now = new Date()
+
+    return filteredDemands.filter((demand) => {
+      if (!demand.deadline) return true
+
+      return new Date(demand.deadline) >= now
+    }).length
+  }, [filteredDemands])
+
+  // -----------------------------------
+  // MONTHLY TREND
+  // -----------------------------------
+
+  const monthlyData = useMemo(() => {
+    const now = new Date()
+
+    let months = []
+
+    if (period === 'Last 30 Days') {
+      months = Array.from({ length: 4 }, (_, index) => {
+        const date = new Date(now)
+        date.setMonth(now.getMonth() - (3 - index))
+
+        return {
+          key: `${date.getFullYear()}-${date.getMonth()}`,
+          month: date.toLocaleString('en-US', {
+            month: 'short',
+          }),
+          collections: 0,
+          waste: 0,
+        }
+      })
+    } else if (period === 'Last 6 Months') {
+      months = Array.from({ length: 6 }, (_, index) => {
+        const date = new Date(now)
+        date.setMonth(now.getMonth() - (5 - index))
+
+        return {
+          key: `${date.getFullYear()}-${date.getMonth()}`,
+          month: date.toLocaleString('en-US', {
+            month: 'short',
+          }),
+          collections: 0,
+          waste: 0,
+        }
+      })
+    } else {
+      months = Array.from({ length: 12 }, (_, index) => {
+        const date = new Date(now.getFullYear(), index, 1)
+
+        return {
+          key: `${date.getFullYear()}-${date.getMonth()}`,
+          month: date.toLocaleString('en-US', {
+            month: 'short',
+          }),
+          collections: 0,
+          waste: 0,
+        }
+      })
+    }
+
+    const monthMap = {}
+
+    months.forEach((month) => {
+      monthMap[month.key] = month
+    })
+
+    filteredWastes.forEach((item) => {
+      const date = new Date(item.createdAt)
+
+      const key = `${date.getFullYear()}-${date.getMonth()}`
+
+      if (monthMap[key]) {
+        monthMap[key].waste += Number(item.quantity || 0)
+      }
+    })
+
+    filteredQuotes.forEach((quote) => {
+      if (quote.status !== 'SELECTED') return
+
+      const date = new Date(quote.createdAt)
+
+      const key = `${date.getFullYear()}-${date.getMonth()}`
+
+      if (monthMap[key]) {
+        monthMap[key].collections += 1
+      }
+    })
+
+    return months
+  }, [filteredWastes, filteredQuotes, period])
+
+  const maxWaste = Math.max(
+    ...monthlyData.map((item) => item.waste),
+    1
+  )
+
+  // -----------------------------------
+  // CATEGORY BREAKDOWN
+  // -----------------------------------
+
+  const categoryData = useMemo(() => {
+    const categoryMap = {}
+
+    filteredWastes.forEach((item) => {
+      const category =
+        item.category ||
+        item.wasteType ||
+        'Unknown'
+
+      const quantity = Number(item.quantity || 0)
+
+      categoryMap[category] =
+        (categoryMap[category] || 0) + quantity
+    })
+
+    const total = Object.values(categoryMap).reduce(
+      (sum, value) => sum + value,
+      0
+    )
+
+    if (!total) {
+      return []
+    }
+
+    return Object.entries(categoryMap)
+      .map(([name, value]) => ({
+        name,
+        value: Math.round((value / total) * 100),
+        quantity: value,
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6)
+  }, [filteredWastes])
+
+  // -----------------------------------
+  // COLLECTOR COUNT
+  // -----------------------------------
+
+  const collectorCount = useMemo(() => {
+    const names = new Set()
+
+    filteredWastes.forEach((item) => {
+      if (item.collectorName) {
+        names.add(item.collectorName)
+      }
+    })
+
+    return names.size
+  }, [filteredWastes])
+
+  // -----------------------------------
+  // RECYCLER PROXY
+  // -----------------------------------
+
+  const recyclerCount = useMemo(() => {
+    /*
+      Backend currently doesn't have a separate Recycler model.
+
+      Therefore we only count unique collectorId values
+      from quotes as a proxy for participating accounts.
+    */
+
+    const recyclers = new Set()
+
+    filteredQuotes.forEach((quote) => {
+      if (quote.collectorId) {
+        recyclers.add(quote.collectorId)
+      }
+    })
+
+    return recyclers.size
+  }, [filteredQuotes])
+
+  // -----------------------------------
+  // DEMAND FULFILLMENT
+  // -----------------------------------
+
+  const fulfillmentRate = useMemo(() => {
+    if (!filteredDemands.length) return 0
+
+    const fulfilledDemandIds = new Set()
+
+    filteredQuotes
+      .filter((quote) => quote.status === 'SELECTED')
+      .forEach((quote) => {
+        if (quote.wasteId) {
+          fulfilledDemandIds.add(String(quote.wasteId))
+        }
+      })
+
+    /*
+      Demand-to-waste linkage isn't currently present
+      in the backend, so a true fulfillment rate cannot
+      be calculated.
+
+      We therefore don't display a fabricated percentage.
+    */
+
+    return null
+  }, [filteredDemands, filteredQuotes])
+
+  // -----------------------------------
+  // EXPORT REPORT
+  // -----------------------------------
+
+  const handleExport = () => {
+    const report = {
+      period,
+      generatedAt: new Date().toISOString(),
+
+      summary: {
+        eWasteUnits: totalWasteQuantity,
+        submittedWasteRecords: filteredWastes.length,
+        completedCollections,
+        pendingOffers,
+        activeDemands,
+        collectorsConnected: collectorCount,
+        recyclerParticipants: recyclerCount,
+      },
+
+      monthlyTrend: monthlyData,
+
+      categoryBreakdown: categoryData,
+
+      note:
+        'Environmental impact, earnings, verified recycler counts and physical weight are not available in the current backend and are therefore not fabricated.',
+    }
+
+    const blob = new Blob(
+      [JSON.stringify(report, null, 2)],
+      { type: 'application/json' }
+    )
+
+    const url = URL.createObjectURL(blob)
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `recyLink-report-${period
+      .toLowerCase()
+      .replaceAll(' ', '-')}.json`
+
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+
+    URL.revokeObjectURL(url)
+  }
 
   return (
     <div className="management-page">
@@ -32,10 +388,13 @@ function Reports() {
       <div className="page-title-row">
         <div>
           <h2>Reports & Analytics</h2>
-          <p>Track RecyLink platform performance and environmental impact</p>
+          <p>
+            Track RecyLink platform performance and network activity
+          </p>
         </div>
 
         <div className="report-actions">
+
           <select
             value={period}
             onChange={(e) => setPeriod(e.target.value)}
@@ -45,310 +404,576 @@ function Reports() {
             <option>Last 30 Days</option>
           </select>
 
-          <button className="export-btn">
+          <button
+            className="export-btn"
+            onClick={handleExport}
+          >
             ↓ Export Report
           </button>
+
         </div>
       </div>
 
-      {/* KEY METRICS */}
+      {/* LOADING */}
 
-      <div className="management-stats">
-
-        <div className="mini-stat">
-          <div className="mini-icon green">♻</div>
-          <div>
-            <span>E-Waste Diverted</span>
-            <strong>18.6 T</strong>
-            <small className="stat-positive">+21.8%</small>
-          </div>
+      {loading && (
+        <div className="report-card">
+          <p>Loading reports...</p>
         </div>
+      )}
 
-        <div className="mini-stat">
-          <div className="mini-icon blue">↻</div>
-          <div>
-            <span>Completed Collections</span>
-            <strong>3,642</strong>
-            <small className="stat-positive">+18.4%</small>
-          </div>
+      {/* ERROR */}
+
+      {error && (
+        <div className="report-card">
+          <p style={{ color: '#c0392b' }}>
+            {error}
+          </p>
         </div>
+      )}
 
-        <div className="mini-stat">
-          <div className="mini-icon orange">₹</div>
-          <div>
-            <span>Collector Earnings</span>
-            <strong>₹18.4L</strong>
-            <small className="stat-positive">+16.2%</small>
-          </div>
-        </div>
+      {!loading && !error && (
+        <>
+          {/* KEY METRICS */}
 
-        <div className="mini-stat">
-          <div className="mini-icon purple">CO₂</div>
-          <div>
-            <span>CO₂e Avoided</span>
-            <strong>42.8 T</strong>
-            <small className="stat-positive">Estimated</small>
-          </div>
-        </div>
+          <div className="management-stats">
 
-      </div>
+            <div className="mini-stat">
+              <div className="mini-icon green">♻</div>
 
-      {/* CHART SECTION */}
+              <div>
+                <span>E-Waste Units</span>
 
-      <div className="reports-grid">
+                <strong>
+                  {totalWasteQuantity}
+                </strong>
 
-        {/* COLLECTION TREND */}
-
-        <div className="report-card large">
-
-          <div className="report-card-header">
-            <div>
-              <h3>Collection & E-Waste Trend</h3>
-              <p>Monthly platform activity</p>
+                <small>
+                  Submitted in {period.toLowerCase()}
+                </small>
+              </div>
             </div>
 
-            <span className="report-period">
-              {period}
-            </span>
-          </div>
 
-          <div className="chart-area">
+            <div className="mini-stat">
+              <div className="mini-icon blue">↻</div>
 
-            <div className="chart-labels">
-              <span>2.5K kg</span>
-              <span>2K kg</span>
-              <span>1.5K kg</span>
-              <span>1K kg</span>
-              <span>500 kg</span>
-              <span>0</span>
+              <div>
+                <span>Completed Collections</span>
+
+                <strong>
+                  {completedCollections}
+                </strong>
+
+                <small>
+                  Selected recycler offers
+                </small>
+              </div>
             </div>
 
-            <div className="bar-chart">
 
-              {monthlyData.map((item) => (
+            <div className="mini-stat">
+              <div className="mini-icon orange">₹</div>
 
-                <div className="bar-column" key={item.month}>
+              <div>
+                <span>Offers Received</span>
 
-                  <div className="bar-value">
-                    {item.waste}
-                  </div>
+                <strong>
+                  {filteredQuotes.length}
+                </strong>
 
-                  <div
-                    className="chart-bar"
-                    style={{
-                      height: `${(item.waste / 2500) * 170}px`
-                    }}
-                  ></div>
+                <small>
+                  {pendingOffers} pending
+                </small>
+              </div>
+            </div>
 
-                  <span>{item.month}</span>
+
+            <div className="mini-stat">
+              <div className="mini-icon purple">◎</div>
+
+              <div>
+                <span>Active Demands</span>
+
+                <strong>
+                  {activeDemands}
+                </strong>
+
+                <small>
+                  Currently open
+                </small>
+              </div>
+            </div>
+
+          </div>
+
+
+          {/* CHART SECTION */}
+
+          <div className="reports-grid">
+
+            {/* COLLECTION TREND */}
+
+            <div className="report-card large">
+
+              <div className="report-card-header">
+
+                <div>
+                  <h3>
+                    Collection & E-Waste Trend
+                  </h3>
+
+                  <p>
+                    Monthly platform activity
+                  </p>
+                </div>
+
+                <span className="report-period">
+                  {period}
+                </span>
+
+              </div>
+
+
+              <div className="chart-area">
+
+                <div className="chart-labels">
+                  <span>
+                    {maxWaste} units
+                  </span>
+
+                  <span>
+                    {Math.round(maxWaste * 0.8)} units
+                  </span>
+
+                  <span>
+                    {Math.round(maxWaste * 0.6)} units
+                  </span>
+
+                  <span>
+                    {Math.round(maxWaste * 0.4)} units
+                  </span>
+
+                  <span>
+                    {Math.round(maxWaste * 0.2)} units
+                  </span>
+
+                  <span>0</span>
+                </div>
+
+
+                <div className="bar-chart">
+
+                  {monthlyData.map((item) => (
+
+                    <div
+                      className="bar-column"
+                      key={item.key}
+                    >
+
+                      <div className="bar-value">
+                        {item.waste}
+                      </div>
+
+                      <div
+                        className="chart-bar"
+                        style={{
+                          height: `${
+                            (item.waste / maxWaste) * 170
+                          }px`,
+                        }}
+                      ></div>
+
+                      <span>
+                        {item.month}
+                      </span>
+
+                    </div>
+
+                  ))}
 
                 </div>
 
-              ))}
+              </div>
 
             </div>
 
-          </div>
 
-        </div>
+            {/* CATEGORY BREAKDOWN */}
 
-        {/* CATEGORY BREAKDOWN */}
+            <div className="report-card">
 
-        <div className="report-card">
+              <div className="report-card-header">
 
-          <div className="report-card-header">
-            <div>
-              <h3>E-Waste by Category</h3>
-              <p>Share of collected material</p>
-            </div>
-          </div>
+                <div>
+                  <h3>
+                    E-Waste by Category
+                  </h3>
 
-          <div className="category-report">
-
-            {categoryData.map((item) => (
-
-              <div className="category-row" key={item.name}>
-
-                <div className="category-row-top">
-                  <span>{item.name}</span>
-                  <strong>{item.value}%</strong>
-                </div>
-
-                <div className="progress-track">
-                  <div
-                    className="progress-fill"
-                    style={{ width: `${item.value}%` }}
-                  ></div>
+                  <p>
+                    Share of submitted material
+                  </p>
                 </div>
 
               </div>
 
-            ))}
 
-          </div>
+              <div className="category-report">
 
-        </div>
+                {categoryData.length === 0 ? (
 
-      </div>
+                  <p>
+                    No category data available.
+                  </p>
 
-      {/* IMPACT SECTION */}
+                ) : (
 
-      <div className="report-card impact-report">
+                  categoryData.map((item) => (
 
-        <div className="report-card-header">
-          <div>
-            <h3>Environmental & Social Impact</h3>
-            <p>Estimated impact generated through the RecyLink network</p>
-          </div>
-        </div>
+                    <div
+                      className="category-row"
+                      key={item.name}
+                    >
 
-        <div className="impact-grid">
+                      <div className="category-row-top">
 
-          <div className="impact-item">
-            <div className="impact-number">
-              18.6 T
-            </div>
-            <strong>E-Waste Diverted</strong>
-            <span>Kept away from informal dumping</span>
-          </div>
+                        <span>
+                          {item.name}
+                        </span>
 
-          <div className="impact-item">
-            <div className="impact-number">
-              12.4 T
-            </div>
-            <strong>Material Recovered</strong>
-            <span>Estimated recyclable material</span>
-          </div>
+                        <strong>
+                          {item.value}%
+                        </strong>
 
-          <div className="impact-item">
-            <div className="impact-number">
-              42.8 T
-            </div>
-            <strong>CO₂e Avoided</strong>
-            <span>Estimated environmental benefit</span>
-          </div>
+                      </div>
 
-          <div className="impact-item">
-            <div className="impact-number">
-              1,248
-            </div>
-            <strong>Collectors Connected</strong>
-            <span>Informal collectors onboarded</span>
-          </div>
+                      <div className="progress-track">
 
-          <div className="impact-item">
-            <div className="impact-number">
-              86
-            </div>
-            <strong>Verified Recyclers</strong>
-            <span>Formal recycling partners</span>
-          </div>
+                        <div
+                          className="progress-fill"
+                          style={{
+                            width: `${item.value}%`,
+                          }}
+                        ></div>
 
-          <div className="impact-item">
-            <div className="impact-number">
-              3,642
-            </div>
-            <strong>Completed Collections</strong>
-            <span>Successfully processed through network</span>
-          </div>
+                      </div>
 
-        </div>
+                    </div>
 
-        <div className="impact-note">
-          <strong>Note:</strong> Environmental impact figures are
-          prototype estimates and can be replaced with verified
-          recycling and recovery data from the backend.
-        </div>
+                  ))
 
-      </div>
+                )}
 
-      {/* PLATFORM SUMMARY */}
-
-      <div className="reports-grid bottom-reports">
-
-        <div className="report-card">
-
-          <div className="report-card-header">
-            <div>
-              <h3>Network Performance</h3>
-              <p>Current ecosystem statistics</p>
-            </div>
-          </div>
-
-          <div className="network-list">
-
-            <div>
-              <span>Collector Verification Rate</span>
-              <strong>93.7%</strong>
-            </div>
-
-            <div>
-              <span>Recycler Verification Rate</span>
-              <strong>91.4%</strong>
-            </div>
-
-            <div>
-              <span>Demand Fulfillment Rate</span>
-              <strong>82.6%</strong>
-            </div>
-
-            <div>
-              <span>Collection Completion Rate</span>
-              <strong>87.2%</strong>
-            </div>
-
-          </div>
-
-        </div>
-
-        <div className="report-card">
-
-          <div className="report-card-header">
-            <div>
-              <h3>Top Recycling Partners</h3>
-              <p>By completed collections</p>
-            </div>
-          </div>
-
-          <div className="recycler-ranking">
-
-            <div>
-              <span className="rank">01</span>
-              <div>
-                <strong>EcoCycle Recycling</strong>
-                <small>628 collections</small>
               </div>
-            </div>
 
-            <div>
-              <span className="rank">02</span>
-              <div>
-                <strong>GreenTech Recyclers</strong>
-                <small>514 collections</small>
-              </div>
-            </div>
-
-            <div>
-              <span className="rank">03</span>
-              <div>
-                <strong>Clean Earth Recycling</strong>
-                <small>482 collections</small>
-              </div>
-            </div>
-
-            <div>
-              <span className="rank">04</span>
-              <div>
-                <strong>GreenLoop India</strong>
-                <small>396 collections</small>
-              </div>
             </div>
 
           </div>
 
-        </div>
 
-      </div>
+          {/* NETWORK IMPACT */}
+
+          <div className="report-card impact-report">
+
+            <div className="report-card-header">
+
+              <div>
+                <h3>
+                  Network & Platform Impact
+                </h3>
+
+                <p>
+                  Metrics calculated from current backend data
+                </p>
+              </div>
+
+            </div>
+
+
+            <div className="impact-grid">
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {totalWasteQuantity}
+                </div>
+
+                <strong>
+                  E-Waste Units
+                </strong>
+
+                <span>
+                  Total submitted quantity
+                </span>
+
+              </div>
+
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {filteredWastes.length}
+                </div>
+
+                <strong>
+                  Waste Submissions
+                </strong>
+
+                <span>
+                  Records processed through platform
+                </span>
+
+              </div>
+
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {completedCollections}
+                </div>
+
+                <strong>
+                  Completed Selections
+                </strong>
+
+                <span>
+                  Offers selected by collectors
+                </span>
+
+              </div>
+
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {collectorCount}
+                </div>
+
+                <strong>
+                  Collectors Connected
+                </strong>
+
+                <span>
+                  Unique collectors in submissions
+                </span>
+
+              </div>
+
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {recyclerCount}
+                </div>
+
+                <strong>
+                  Participating Accounts
+                </strong>
+
+                <span>
+                  Derived from quote activity
+                </span>
+
+              </div>
+
+
+              <div className="impact-item">
+
+                <div className="impact-number">
+                  {filteredDemands.length}
+                </div>
+
+                <strong>
+                  Demands Created
+                </strong>
+
+                <span>
+                  Recycler requirements submitted
+                </span>
+
+              </div>
+
+            </div>
+
+
+            <div className="impact-note">
+
+              <strong>Note:</strong>{' '}
+              Physical e-waste weight, CO₂e avoided,
+              material recovery, collector earnings,
+              verified recycler count and verification
+              rates are not currently available in the
+              backend API. These figures are intentionally
+              not fabricated.
+
+            </div>
+
+          </div>
+
+
+          {/* PLATFORM SUMMARY */}
+
+          <div className="reports-grid bottom-reports">
+
+            {/* NETWORK PERFORMANCE */}
+
+            <div className="report-card">
+
+              <div className="report-card-header">
+
+                <div>
+                  <h3>
+                    Network Performance
+                  </h3>
+
+                  <p>
+                    Current ecosystem statistics
+                  </p>
+                </div>
+
+              </div>
+
+
+              <div className="network-list">
+
+                <div>
+                  <span>
+                    E-Waste Submissions
+                  </span>
+
+                  <strong>
+                    {filteredWastes.length}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    Active Demands
+                  </span>
+
+                  <strong>
+                    {activeDemands}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    Offers Received
+                  </span>
+
+                  <strong>
+                    {filteredQuotes.length}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    Selected Offers
+                  </span>
+
+                  <strong>
+                    {completedCollections}
+                  </strong>
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* TOP RECYCLERS */}
+
+            <div className="report-card">
+
+              <div className="report-card-header">
+
+                <div>
+                  <h3>
+                    Recycler Activity
+                  </h3>
+
+                  <p>
+                    Based on current quote activity
+                  </p>
+                </div>
+
+              </div>
+
+
+              <div className="recycler-ranking">
+
+                {filteredQuotes.length === 0 ? (
+
+                  <p>
+                    No recycler activity available.
+                  </p>
+
+                ) : (
+
+                  <>
+                    <div>
+                      <span className="rank">
+                        01
+                      </span>
+
+                      <div>
+                        <strong>
+                          Active Quote Network
+                        </strong>
+
+                        <small>
+                          {filteredQuotes.length} offers received
+                        </small>
+                      </div>
+                    </div>
+
+
+                    <div>
+                      <span className="rank">
+                        02
+                      </span>
+
+                      <div>
+                        <strong>
+                          Selected Offers
+                        </strong>
+
+                        <small>
+                          {completedCollections} collections selected
+                        </small>
+                      </div>
+                    </div>
+
+
+                    <div>
+                      <span className="rank">
+                        03
+                      </span>
+
+                      <div>
+                        <strong>
+                          Pending Offers
+                        </strong>
+
+                        <small>
+                          {pendingOffers} awaiting selection
+                        </small>
+                      </div>
+                    </div>
+                  </>
+
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        </>
+      )}
 
     </div>
   )

@@ -1,69 +1,123 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 
-const submissions = [
-  {
-    id: 101,
-    collector: 'Rahul Kumar',
-    initials: 'RK',
-    device: 'Dell Latitude Laptop',
-    category: 'Laptop',
-    quantity: 5,
-    weight: '11.5 kg',
-    condition: 'Partially Working',
-    aiScore: 94,
-    recommendation: 'Repair',
-    location: 'Delhi NCR',
-    submitted: '2 hours ago',
-    status: 'Awaiting Offer',
-  },
-  {
-    id: 102,
-    collector: 'Aman Sharma',
-    initials: 'AS',
-    device: 'Desktop Computer',
-    category: 'Desktop',
-    quantity: 8,
-    weight: '24 kg',
-    condition: 'Non-Working',
-    aiScore: 91,
-    recommendation: 'Refurbish',
-    location: 'Ghaziabad',
-    submitted: '5 hours ago',
-    status: 'Awaiting Offer',
-  },
-  {
-    id: 103,
-    collector: 'Priya Mehta',
-    initials: 'PM',
-    device: 'Samsung Mobile Phones',
-    category: 'Mobile',
-    quantity: 12,
-    weight: '4.8 kg',
-    condition: 'Partially Working',
-    aiScore: 96,
-    recommendation: 'Repair',
-    location: 'Delhi',
-    submitted: 'Yesterday',
-    status: 'Offer Sent',
-  },
-  {
-    id: 104,
-    collector: 'Vikash Singh',
-    initials: 'VS',
-    device: 'HP Laser Printer',
-    category: 'Printer',
-    quantity: 6,
-    weight: '18 kg',
-    condition: 'Non-Working',
-    aiScore: 88,
-    recommendation: 'Recycle',
-    location: 'Faridabad',
-    submitted: 'Yesterday',
-    status: 'Offer Sent',
-  },
-]
-
 function EWaste() {
+  const [submissions, setSubmissions] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  const [search, setSearch] = useState('')
+  const [categoryFilter, setCategoryFilter] = useState('all')
+  const [statusFilter, setStatusFilter] = useState('pending')
+
+  // Fetch real e-waste from backend
+  useEffect(() => {
+    const fetchSubmissions = async () => {
+      try {
+        setLoading(true)
+
+        const response = await fetch(
+          'http://localhost:5000/api/waste'
+        )
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || 'Failed to fetch e-waste'
+          )
+        }
+
+        const wastes = result.wastes || []
+
+        const formattedData = wastes.map((item) => ({
+          id: item._id,
+          collector: item.collectorName || 'Unknown Collector',
+          initials: item.collectorName
+            ? item.collectorName
+                .split(' ')
+                .map((word) => word[0])
+                .join('')
+                .slice(0, 2)
+                .toUpperCase()
+            : 'C',
+          device: item.category || item.wasteType,
+          category: item.category || item.wasteType,
+          quantity: item.quantity,
+          condition: item.condition,
+          location: item.location,
+          aiScore: item.classificationConfidence
+            ? Math.round(item.classificationConfidence * 100)
+            : 0,
+          recommendation: item.recommendation
+            ? item.recommendation.replaceAll('_', ' ')
+            : 'Pending',
+          reusePotential: item.reusePotential || 'N/A',
+          submitted: new Date(item.createdAt).toLocaleString(),
+          status: 'Awaiting Offer',
+        }))
+
+        setSubmissions(formattedData)
+
+      } catch (err) {
+        console.error('Fetch E-Waste Error:', err)
+        setError(err.message || 'Unable to load submissions')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchSubmissions()
+  }, [])
+
+
+  // Search + filters
+  const filteredSubmissions = useMemo(() => {
+    return submissions.filter((item) => {
+      const searchText = search.toLowerCase()
+
+      const matchesSearch =
+        item.collector.toLowerCase().includes(searchText) ||
+        item.device.toLowerCase().includes(searchText) ||
+        item.category.toLowerCase().includes(searchText) ||
+        item.location.toLowerCase().includes(searchText)
+
+      const matchesCategory =
+        categoryFilter === 'all' ||
+        item.category.toLowerCase() === categoryFilter.toLowerCase()
+
+      const matchesStatus =
+        statusFilter === 'all' ||
+        (statusFilter === 'pending' &&
+          item.status === 'Awaiting Offer') ||
+        (statusFilter === 'sent' &&
+          item.status === 'Offer Sent')
+
+      return (
+        matchesSearch &&
+        matchesCategory &&
+        matchesStatus
+      )
+    })
+  }, [
+    submissions,
+    search,
+    categoryFilter,
+    statusFilter,
+  ])
+
+
+  const awaitingOffers = submissions.filter(
+    (item) => item.status === 'Awaiting Offer'
+  ).length
+
+
+  const totalWeight = submissions.reduce(
+    (total, item) => total + (Number(item.weight) || 0),
+    0
+  )
+
+
   return (
     <div className="recycler-app">
 
@@ -73,6 +127,7 @@ function EWaste() {
         <div className="ewaste-header">
 
           <div>
+
             <Link
               to="/recycler"
               className="back-link"
@@ -84,12 +139,15 @@ function EWaste() {
               COLLECTOR SUBMISSIONS
             </span>
 
-            <h1>Incoming E-Waste</h1>
+            <h1>
+              Incoming E-Waste
+            </h1>
 
             <p>
               Review collector submissions, AI assessments and
               create competitive offers.
             </p>
+
           </div>
 
         </div>
@@ -100,26 +158,63 @@ function EWaste() {
 
           <div className="ewaste-stat">
             <span>NEW SUBMISSIONS</span>
-            <strong>12</strong>
-            <small>+4 today</small>
+
+            <strong>
+              {submissions.length}
+            </strong>
+
+            <small>
+              From collectors
+            </small>
           </div>
+
 
           <div className="ewaste-stat">
             <span>AWAITING OFFER</span>
-            <strong>7</strong>
-            <small>Requires action</small>
+
+            <strong>
+              {awaitingOffers}
+            </strong>
+
+            <small>
+              Requires action
+            </small>
           </div>
+
 
           <div className="ewaste-stat">
             <span>AI ASSESSED</span>
-            <strong>24</strong>
-            <small>100% processed</small>
+
+            <strong>
+              {
+                submissions.filter(
+                  (item) => item.aiScore > 0
+                ).length
+              }
+            </strong>
+
+            <small>
+              AI processed
+            </small>
           </div>
 
+
           <div className="ewaste-stat">
-            <span>TOTAL WEIGHT</span>
-            <strong>186 kg</strong>
-            <small>This month</small>
+            <span>TOTAL ITEMS</span>
+
+            <strong>
+              {
+                submissions.reduce(
+                  (total, item) =>
+                    total + Number(item.quantity || 0),
+                  0
+                )
+              }
+            </strong>
+
+            <small>
+              Units submitted
+            </small>
           </div>
 
         </div>
@@ -129,154 +224,288 @@ function EWaste() {
         <div className="ewaste-toolbar">
 
           <div className="ewaste-search">
-            <span>⌕</span>
+
+            <span>
+              ⌕
+            </span>
 
             <input
               type="text"
               placeholder="Search collector or device..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
             />
+
           </div>
 
-          <select defaultValue="all">
+
+          <select
+            value={categoryFilter}
+            onChange={(e) =>
+              setCategoryFilter(e.target.value)
+            }
+          >
+
             <option value="all">
               All Categories
             </option>
 
-            <option>Laptops</option>
-            <option>Desktop</option>
-            <option>Mobile</option>
-            <option>Printer</option>
+            <option value="Laptop">
+              Laptop
+            </option>
+
+            <option value="Television">
+              Television
+            </option>
+
+            <option value="Mobile">
+              Mobile
+            </option>
+
+            <option value="Mouse">
+              Mouse
+            </option>
+
+            <option value="Printer">
+              Printer
+            </option>
+
+            <option value="Desktop">
+              Desktop
+            </option>
+
+            <option value="Keyboard">
+              Keyboard
+            </option>
+
           </select>
 
-          <select defaultValue="pending">
+
+          <select
+            value={statusFilter}
+            onChange={(e) =>
+              setStatusFilter(e.target.value)
+            }
+          >
+
             <option value="pending">
               Awaiting Offer
             </option>
 
-            <option>Offer Sent</option>
-            <option>All Submissions</option>
+            <option value="sent">
+              Offer Sent
+            </option>
+
+            <option value="all">
+              All Submissions
+            </option>
+
           </select>
 
         </div>
 
 
+        {/* Loading */}
+        {loading && (
+
+          <div className="ewaste-info-banner">
+            <div className="ewaste-info-icon">
+              AI
+            </div>
+
+            <div>
+              <strong>
+                Loading submissions...
+              </strong>
+
+              <p>
+                Fetching collector e-waste from RecyLink backend.
+              </p>
+            </div>
+          </div>
+
+        )}
+
+
+        {/* Error */}
+        {!loading && error && (
+
+          <div className="ewaste-info-banner">
+
+            <div className="ewaste-info-icon">
+              !
+            </div>
+
+            <div>
+              <strong>
+                Unable to load submissions
+              </strong>
+
+              <p>
+                {error}
+              </p>
+            </div>
+
+          </div>
+
+        )}
+
+
+        {/* Empty */}
+        {!loading &&
+          !error &&
+          filteredSubmissions.length === 0 && (
+
+          <div className="ewaste-info-banner">
+
+            <div className="ewaste-info-icon">
+              AI
+            </div>
+
+            <div>
+              <strong>
+                No e-waste submissions found
+              </strong>
+
+              <p>
+                Try changing your search or filters.
+              </p>
+            </div>
+
+          </div>
+
+        )}
+
+
         {/* Submission list */}
-        <div className="ewaste-list">
+        {!loading &&
+          !error &&
+          filteredSubmissions.length > 0 && (
 
-          {submissions.map((item) => (
+          <div className="ewaste-list">
 
-            <div
-              className="ewaste-card"
-              key={item.id}
-            >
+            {filteredSubmissions.map((item) => (
 
-              {/* Collector */}
-              <div className="ewaste-collector">
+              <div
+                className="ewaste-card"
+                key={item.id}
+              >
 
-                <div className="collector-avatar large">
-                  {item.initials}
+                {/* Collector */}
+                <div className="ewaste-collector">
+
+                  <div className="collector-avatar large">
+                    {item.initials}
+                  </div>
+
+                  <div>
+
+                    <strong>
+                      {item.collector}
+                    </strong>
+
+                    <span>
+                      {item.location}
+                    </span>
+
+                    <small>
+                      Submitted {item.submitted}
+                    </small>
+
+                  </div>
+
                 </div>
 
-                <div>
-                  <strong>{item.collector}</strong>
 
-                  <span>
-                    {item.location}
+                {/* Device */}
+                <div className="ewaste-device">
+
+                  <div className="device-icon">
+
+                    {item.category === 'Laptop' && '💻'}
+                    {item.category === 'Desktop' && '🖥️'}
+                    {item.category === 'Mobile' && '📱'}
+                    {item.category === 'Mouse' && '🖱️'}
+                    {item.category === 'Keyboard' && '⌨️'}
+                    {item.category === 'Printer' && '🖨️'}
+                    {item.category === 'Television' && '📺'}
+
+                  </div>
+
+
+                  <div>
+
+                    <strong>
+                      {item.device}
+                    </strong>
+
+                    <span>
+                      {item.quantity} units
+                    </span>
+
+                    <small>
+                      Condition: {item.condition}
+                    </small>
+
+                  </div>
+
+                </div>
+
+
+                {/* AI */}
+                <div className="ai-assessment">
+
+                  <div className="ai-score">
+
+                    <strong>
+                      {item.aiScore}%
+                    </strong>
+
+                    <span>
+                      AI Confidence
+                    </span>
+
+                  </div>
+
+
+                  <div className="ai-recommendation">
+
+                    <span>
+                      RECOMMENDATION
+                    </span>
+
+                    <strong>
+                      {item.recommendation}
+                    </strong>
+
+                  </div>
+
+                </div>
+
+
+                {/* Status */}
+                <div className="ewaste-status-area">
+
+                  <span className="ewaste-status pending">
+                    Awaiting Offer
                   </span>
 
-                  <small>
-                    Submitted {item.submitted}
-                  </small>
-                </div>
-
-              </div>
-
-
-              {/* Device */}
-              <div className="ewaste-device">
-
-                <div className="device-icon">
-                  {item.category === 'Laptop' && '💻'}
-                  {item.category === 'Desktop' && '🖥️'}
-                  {item.category === 'Mobile' && '📱'}
-                  {item.category === 'Printer' && '🖨️'}
-                </div>
-
-                <div>
-                  <strong>{item.device}</strong>
-
-                  <span>
-                    {item.quantity} units · {item.weight}
-                  </span>
-
-                  <small>
-                    Condition: {item.condition}
-                  </small>
-                </div>
-
-              </div>
-
-
-              {/* AI */}
-              <div className="ai-assessment">
-
-                <div className="ai-score">
-                  <strong>
-                    {item.aiScore}%
-                  </strong>
-
-                  <span>
-                    AI Confidence
-                  </span>
-                </div>
-
-                <div className="ai-recommendation">
-                  <span>RECOMMENDATION</span>
-
-                  <strong>
-                    {item.recommendation}
-                  </strong>
-                </div>
-
-              </div>
-
-
-              {/* Status */}
-              <div className="ewaste-status-area">
-
-                <span
-                  className={
-                    item.status === 'Awaiting Offer'
-                      ? 'ewaste-status pending'
-                      : 'ewaste-status sent'
-                  }
-                >
-                  {item.status}
-                </span>
-
-                {item.status === 'Awaiting Offer' ? (
                   <Link
                     to={`/recycler/ewaste/${item.id}`}
                     className="offer-btn"
                   >
                     Review & Offer →
                   </Link>
-                ) : (
-                  <Link
-                    to={`/recycler/ewaste/${item.id}`}
-                    className="view-btn"
-                  >
-                    View Details
-                  </Link>
-                )}
+
+                </div>
 
               </div>
 
-            </div>
+            ))}
 
-          ))}
+          </div>
 
-        </div>
+        )}
 
 
         {/* Info */}
@@ -287,15 +516,17 @@ function EWaste() {
           </div>
 
           <div>
+
             <strong>
               AI-assisted e-waste assessment
             </strong>
 
             <p>
               RecyLink analyzes uploaded e-waste images and
-              basic condition information to help recyclers
-              make faster repair, refurbish or recycle decisions.
+              condition information to help recyclers make
+              faster repair, refurbish or recycling decisions.
             </p>
+
           </div>
 
         </div>

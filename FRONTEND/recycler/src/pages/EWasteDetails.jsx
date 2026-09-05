@@ -1,8 +1,139 @@
+import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 
 function EWasteDetails() {
   const { id } = useParams()
+
+  const [waste, setWaste] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+
+  useEffect(() => {
+    const fetchWaste = async () => {
+      try {
+        setLoading(true)
+
+        const response = await fetch(
+          'http://localhost:5000/api/waste'
+        )
+
+        const result = await response.json()
+
+        if (!response.ok) {
+          throw new Error(
+            result.message || 'Failed to fetch e-waste'
+          )
+        }
+
+        const foundWaste = result.wastes?.find(
+          (item) => item._id === id
+        )
+
+        if (!foundWaste) {
+          throw new Error('E-waste submission not found')
+        }
+
+        setWaste(foundWaste)
+
+      } catch (err) {
+        console.error('Fetch Waste Details Error:', err)
+        setError(err.message || 'Unable to load submission')
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchWaste()
+  }, [id])
+
+
+  if (loading) {
+    return (
+      <div className="recycler-app">
+        <Navbar />
+
+        <main className="ewaste-details-page">
+          <div className="details-card">
+            <h2>Loading E-Waste Assessment...</h2>
+            <p>
+              Fetching submission and AI assessment from RecyLink.
+            </p>
+          </div>
+        </main>
+      </div>
+    )
+  }
+
+
+  if (error || !waste) {
+    return (
+      <div className="recycler-app">
+        <Navbar />
+
+        <main className="ewaste-details-page">
+
+          <div className="details-card">
+
+            <h2>
+              Unable to load submission
+            </h2>
+
+            <p>
+              {error || 'Submission not found'}
+            </p>
+
+            <Link
+              to="/recycler/ewaste"
+              className="create-offer-btn"
+            >
+              ← Back to E-Waste
+            </Link>
+
+          </div>
+
+        </main>
+      </div>
+    )
+  }
+
+
+  const classificationConfidence = Math.round(
+    (waste.classificationConfidence || 0) * 100
+  )
+
+  const repairabilityConfidence = Math.round(
+    (waste.repairabilityConfidence || 0) * 100
+  )
+
+  const recommendation =
+    waste.recommendation
+      ?.replaceAll('_', ' ') || 'PENDING'
+
+
+  const getDeviceIcon = () => {
+    switch (waste.category) {
+      case 'Laptop':
+        return '💻'
+      case 'Desktop':
+        return '🖥️'
+      case 'Mobile':
+        return '📱'
+      case 'Mouse':
+        return '🖱️'
+      case 'Keyboard':
+        return '⌨️'
+      case 'Printer':
+        return '🖨️'
+      case 'Television':
+        return '📺'
+      case 'Battery':
+        return '🔋'
+      default:
+        return '♻️'
+    }
+  }
+
 
   return (
     <div className="recycler-app">
@@ -15,6 +146,7 @@ function EWasteDetails() {
         <div className="details-header">
 
           <div>
+
             <Link
               to="/recycler/ewaste"
               className="back-link"
@@ -23,15 +155,18 @@ function EWasteDetails() {
             </Link>
 
             <span className="eyebrow">
-              SUBMISSION #{id}
+              SUBMISSION #{id.slice(-6).toUpperCase()}
             </span>
 
-            <h1>E-Waste Assessment</h1>
+            <h1>
+              E-Waste Assessment
+            </h1>
 
             <p>
               Review the collector submission and AI-assisted
               assessment before creating an offer.
             </p>
+
           </div>
 
           <span className="details-status">
@@ -52,7 +187,7 @@ function EWasteDetails() {
             <section className="details-card waste-summary-card">
 
               <div className="waste-device-icon">
-                💻
+                {getDeviceIcon()}
               </div>
 
               <div className="waste-summary-content">
@@ -62,25 +197,26 @@ function EWasteDetails() {
                 </span>
 
                 <h2>
-                  Dell Latitude Laptop
+                  {waste.category || waste.wasteType}
                 </h2>
 
                 <p>
-                  Laptop · 5 units · 11.5 kg total
+                  {waste.wasteType} · {waste.quantity} units
                 </p>
 
                 <div className="summary-tags">
 
                   <span>
-                    Partially Working
+                    {waste.condition}
                   </span>
 
                   <span>
-                    Delhi NCR
+                    {waste.location}
                   </span>
 
                   <span>
-                    Submitted 2 hours ago
+                    Submitted{' '}
+                    {new Date(waste.createdAt).toLocaleString()}
                   </span>
 
                 </div>
@@ -96,6 +232,7 @@ function EWasteDetails() {
               <div className="details-card-heading">
 
                 <div>
+
                   <span className="card-eyebrow">
                     ARTIFICIAL INTELLIGENCE
                   </span>
@@ -105,9 +242,10 @@ function EWasteDetails() {
                   </h2>
 
                   <p>
-                    Automated analysis based on uploaded
-                    e-waste images and condition information.
+                    Automated analysis based on the uploaded
+                    e-waste image and condition information.
                   </p>
+
                 </div>
 
                 <div className="ai-powered-badge">
@@ -123,12 +261,19 @@ function EWasteDetails() {
                 <div className="ai-score-large">
 
                   <div className="score-circle">
-                    <strong>94%</strong>
-                    <span>Confidence</span>
+
+                    <strong>
+                      {classificationConfidence}%
+                    </strong>
+
+                    <span>
+                      Confidence
+                    </span>
+
                   </div>
 
                   <p>
-                    High confidence classification
+                    AI classification confidence
                   </p>
 
                 </div>
@@ -142,13 +287,12 @@ function EWasteDetails() {
                   </span>
 
                   <strong>
-                    Repair
+                    {recommendation}
                   </strong>
 
                   <p>
-                    The device appears suitable for repair
-                    or refurbishment based on its condition
-                    and detected components.
+                    {waste.reason ||
+                      'AI assessment information is available for recycler review.'}
                   </p>
 
                 </div>
@@ -164,15 +308,23 @@ function EWasteDetails() {
                 </div>
 
                 <div>
+
                   <strong>
                     AI Insight
                   </strong>
 
                   <p>
-                    Key components appear potentially reusable.
-                    Recycler review is recommended before final
-                    processing.
+                    Repairability confidence:{' '}
+                    <strong>
+                      {repairabilityConfidence}%
+                    </strong>
+                    {' · '}
+                    Reuse potential:{' '}
+                    <strong>
+                      {waste.reusePotential || 'N/A'}
+                    </strong>
                   </p>
+
                 </div>
 
               </div>
@@ -186,6 +338,7 @@ function EWasteDetails() {
               <div className="details-card-heading">
 
                 <div>
+
                   <span className="card-eyebrow">
                     SUBMISSION INFORMATION
                   </span>
@@ -193,6 +346,7 @@ function EWasteDetails() {
                   <h2>
                     Device Details
                   </h2>
+
                 </div>
 
               </div>
@@ -201,33 +355,68 @@ function EWasteDetails() {
               <div className="device-info-grid">
 
                 <div>
-                  <span>DEVICE</span>
-                  <strong>Dell Latitude Laptop</strong>
+                  <span>
+                    DEVICE / TYPE
+                  </span>
+
+                  <strong>
+                    {waste.wasteType}
+                  </strong>
                 </div>
 
-                <div>
-                  <span>CATEGORY</span>
-                  <strong>Laptop</strong>
-                </div>
 
                 <div>
-                  <span>QUANTITY</span>
-                  <strong>5 units</strong>
+                  <span>
+                    AI CATEGORY
+                  </span>
+
+                  <strong>
+                    {waste.category}
+                  </strong>
                 </div>
 
-                <div>
-                  <span>TOTAL WEIGHT</span>
-                  <strong>11.5 kg</strong>
-                </div>
 
                 <div>
-                  <span>CONDITION</span>
-                  <strong>Partially Working</strong>
+                  <span>
+                    QUANTITY
+                  </span>
+
+                  <strong>
+                    {waste.quantity} units
+                  </strong>
                 </div>
 
+
                 <div>
-                  <span>LOCATION</span>
-                  <strong>Delhi NCR</strong>
+                  <span>
+                    CONDITION
+                  </span>
+
+                  <strong>
+                    {waste.condition}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    LOCATION
+                  </span>
+
+                  <strong>
+                    {waste.location}
+                  </strong>
+                </div>
+
+
+                <div>
+                  <span>
+                    REUSE POTENTIAL
+                  </span>
+
+                  <strong>
+                    {waste.reusePotential || 'N/A'}
+                  </strong>
                 </div>
 
               </div>
@@ -235,19 +424,25 @@ function EWasteDetails() {
             </section>
 
 
-            {/* Components */}
+            {/* Suggested Actions */}
             <section className="details-card">
 
               <div className="details-card-heading">
 
                 <div>
+
                   <span className="card-eyebrow">
-                    AI-DETECTED
+                    AI RECOMMENDATIONS
                   </span>
 
                   <h2>
-                    Potentially Reusable Components
+                    Suggested Actions
                   </h2>
+
+                  <p>
+                    Recommended next steps based on the AI assessment.
+                  </p>
+
                 </div>
 
               </div>
@@ -255,29 +450,48 @@ function EWasteDetails() {
 
               <div className="component-list">
 
-                <div className="component-item">
-                  <span>01</span>
-                  <strong>LCD Display</strong>
-                  <small>Reusable</small>
-                </div>
+                {waste.suggestedActions?.length > 0 ? (
 
-                <div className="component-item">
-                  <span>02</span>
-                  <strong>RAM Module</strong>
-                  <small>Reusable</small>
-                </div>
+                  waste.suggestedActions.map(
+                    (action, index) => (
 
-                <div className="component-item">
-                  <span>03</span>
-                  <strong>Keyboard</strong>
-                  <small>Reusable</small>
-                </div>
+                      <div
+                        className="component-item"
+                        key={index}
+                      >
 
-                <div className="component-item">
-                  <span>04</span>
-                  <strong>Battery</strong>
-                  <small>Inspect</small>
-                </div>
+                        <span>
+                          {String(index + 1).padStart(2, '0')}
+                        </span>
+
+                        <strong>
+                          {action}
+                        </strong>
+
+                        <small>
+                          AI Suggested
+                        </small>
+
+                      </div>
+
+                    )
+                  )
+
+                ) : (
+
+                  <div className="component-item">
+
+                    <span>
+                      ✓
+                    </span>
+
+                    <strong>
+                      No additional actions provided
+                    </strong>
+
+                  </div>
+
+                )}
 
               </div>
 
@@ -300,43 +514,77 @@ function EWasteDetails() {
               <div className="collector-profile">
 
                 <div className="profile-avatar">
-                  RK
-                </div>
+  {(waste.collectorName || 'C')
+    .split(' ')
+    .map((word) => word[0])
+    .join('')
+    .slice(0, 2)
+    .toUpperCase()}
+</div>
 
                 <div>
-                  <strong>
-                    Rahul Kumar
-                  </strong>
+<strong>
+  {waste.collectorName || 'Unknown Collector'}
+</strong>
 
                   <span>
-                    Verified Collector
+                    RecyLink Collector
                   </span>
+
                 </div>
 
               </div>
 
 
               <div className="collector-location">
-                <span>●</span>
-                Delhi NCR
+
+                <span>
+                  ●
+                </span>
+
+                {waste.location}
+
               </div>
 
 
               <div className="collector-stats">
 
                 <div>
-                  <strong>4.8</strong>
-                  <span>Rating</span>
+
+                  <strong>
+                    {waste.quantity}
+                  </strong>
+
+                  <span>
+                    Units
+                  </span>
+
                 </div>
 
-                <div>
-                  <strong>18</strong>
-                  <span>Collections</span>
-                </div>
 
                 <div>
-                  <strong>248kg</strong>
-                  <span>Collected</span>
+
+                  <strong>
+                    {classificationConfidence}%
+                  </strong>
+
+                  <span>
+                    AI Confidence
+                  </span>
+
+                </div>
+
+
+                <div>
+
+                  <strong>
+                    {waste.reusePotential || 'N/A'}
+                  </strong>
+
+                  <span>
+                    Reuse
+                  </span>
+
                 </div>
 
               </div>
@@ -368,7 +616,7 @@ function EWasteDetails() {
                 </span>
 
                 <strong>
-                  5 units
+                  {waste.quantity} units
                 </strong>
 
               </div>
@@ -387,7 +635,9 @@ function EWasteDetails() {
             {/* Notice */}
             <div className="details-notice">
 
-              <span>ⓘ</span>
+              <span>
+                ⓘ
+              </span>
 
               <p>
                 AI results are decision-support information.

@@ -1,4 +1,5 @@
 const Waste = require("../models/Waste");
+const { checkWaste } = require("../services/aiService");
 
 const createWaste = async (req, res) => {
   try {
@@ -6,11 +7,12 @@ const createWaste = async (req, res) => {
       wasteType,
       quantity,
       location,
-      condition
+      condition,
+      collectorName
     } = req.body;
 
     // Validate text fields
-    if (!wasteType || !quantity || !location || !condition) {
+    if (!wasteType || !quantity || !location || !condition || !collectorName) {
       return res.status(400).json({
         success: false,
         message:
@@ -26,15 +28,37 @@ const createWaste = async (req, res) => {
       });
     }
 
-    // AI integration is temporarily paused
-    // AI result will be added later
+    // Send image to AI service
+    const aiResult = await checkWaste(
+      req.file.path,
+      condition
+    );
 
+    // Save waste + AI result
     const waste = await Waste.create({
       wasteType,
       quantity,
       location,
       condition,
-      image: req.file.path
+      collectorName,
+      image: req.file.path,
+
+      category: aiResult.category,
+      classificationConfidence:
+        aiResult.classification_confidence,
+
+      recommendation: aiResult.recommendation,
+
+      repairabilityConfidence:
+        aiResult.repairability_confidence,
+
+      reason: aiResult.reason,
+
+      suggestedActions:
+        aiResult.suggested_actions || [],
+
+      reusePotential:
+        aiResult.reuse_potential
     });
 
     res.status(201).json({
@@ -62,6 +86,7 @@ const createWaste = async (req, res) => {
   }
 };
 
+
 const getWastes = async (req, res) => {
   try {
     const wastes = await Waste.find().sort({ createdAt: -1 });
@@ -82,6 +107,7 @@ const getWastes = async (req, res) => {
     });
   }
 };
+
 
 module.exports = {
   createWaste,

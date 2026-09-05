@@ -1,15 +1,42 @@
 const Demand = require("../models/Demand");
 
-// POST/api/demands
-const createDemand = async (req, res)=>{
-
+const createDemand = async (req, res) => {
     try {
-        const { wasteType, quantity, location } = req.body;
+        const {
+            wasteType,
+            quantity,
+            location,
+            minPrice,
+            maxPrice,
+            deadline,
+            condition,
+            description
+        } = req.body;
+
+        if (
+            !wasteType ||
+            !quantity ||
+            !location ||
+            minPrice === undefined ||
+            maxPrice === undefined ||
+            !deadline
+        ) {
+            return res.status(400).json({
+                success: false,
+                message:
+                    "wasteType, quantity, location, minPrice, maxPrice and deadline are required"
+            });
+        }
 
         const demand = await Demand.create({
             wasteType,
             quantity,
-            location
+            location,
+            minPrice,
+            maxPrice,
+            deadline,
+            condition,
+            description
         });
 
         res.status(201).json({
@@ -17,8 +44,10 @@ const createDemand = async (req, res)=>{
             message: "Demand created Successfully",
             demand
         });
-    }
-    catch(error){
+
+    } catch (error) {
+
+        console.error("Create Demand Error:", error);
 
         res.status(500).json({
             success: false,
