@@ -31,7 +31,7 @@ function CreateDemand() {
 
   try {
     const response = await fetch(
-      'http://localhost:5000/api/demands',
+      'https://recylink-zt6e.onrender.com/api/demands',
       {
         method: 'POST',
         headers: {

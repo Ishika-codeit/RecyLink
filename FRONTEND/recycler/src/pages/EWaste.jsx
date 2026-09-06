@@ -17,7 +17,7 @@ function EWaste() {
         setLoading(true)
 
         const response = await fetch(
-          'http://localhost:5000/api/waste'
+          'https://recylink-zt6e.onrender.com/api/waste'
         )
 
         const result = await response.json()

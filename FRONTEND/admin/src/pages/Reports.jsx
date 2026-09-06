@@ -17,9 +17,9 @@ function Reports() {
         setError('')
 
         const [wasteRes, demandRes, quoteRes] = await Promise.all([
-          fetch('http://localhost:5000/api/waste'),
-          fetch('http://localhost:5000/api/demands'),
-          fetch('http://localhost:5000/api/quotes'),
+          fetch('https://recylink-zt6e.onrender.com/api/waste'),
+          fetch('https://recylink-zt6e.onrender.com/api/demands'),
+          fetch('https://recylink-zt6e.onrender.com/api/quotes'),
         ])
 
         const wasteData = await wasteRes.json()

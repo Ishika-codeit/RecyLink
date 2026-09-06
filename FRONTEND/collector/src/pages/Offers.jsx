@@ -18,7 +18,7 @@ function Offers() {
         setLoading(true)
 
         const response = await fetch(
-          'http://localhost:5000/api/quotes'
+          'https://recylink-zt6e.onrender.com/api/quotes'
         )
 
         const result = await response.json()
@@ -105,7 +105,7 @@ function Offers() {
 
     try {
       const response = await fetch(
-        `http://localhost:5000/api/quotes/${selectedOffer.id}/select`,
+        `https://recylink-zt6e.onrender.com/api/quotes/${selectedOffer.id}/select`,
         {
           method: 'PATCH',
         }

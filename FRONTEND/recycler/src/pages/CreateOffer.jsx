@@ -34,7 +34,7 @@ function CreateOffer() {
         setLoadingWaste(true)
 
         const response = await fetch(
-          'http://localhost:5000/api/waste'
+          'https://recylink-zt6e.onrender.com/api/waste'
         )
 
         const result = await response.json()
@@ -110,7 +110,7 @@ function CreateOffer() {
 
     try {
       const response = await fetch(
-        'http://localhost:5000/api/quotes',
+        'https://recylink-zt6e.onrender.com/api/quotes',
         {
           method: 'POST',
           headers: {
