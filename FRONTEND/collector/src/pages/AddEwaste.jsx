@@ -278,36 +278,21 @@ function AddEwaste() {
       )
 
 
-      // ---------------------------------
-      // COLLECTOR LOGIN
-      // ---------------------------------
+      /// ---------------------------------
+// COLLECTOR IDENTITY
+// ---------------------------------
 
-      const user = JSON.parse(
-        localStorage.getItem('user') ||
-          'null'
-      )
+const user = JSON.parse(
+  localStorage.getItem('user') || 'null'
+)
 
+const collectorName =
+  user?.name?.trim() || 'Collector'
 
-      if (
-        !user ||
-        user.role !== 'collector'
-      ) {
-        alert(
-          'Collector login not found.'
-        )
-
-        setSubmitting(false)
-
-        return
-      }
-
-
-      data.append(
-        'collectorName',
-        user.name
-      )
-
-
+data.append(
+  'collectorName',
+  collectorName
+)
       // ---------------------------------
       // IMAGE
       // ---------------------------------

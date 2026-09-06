@@ -7,14 +7,26 @@ const createQuote = async (req, res) => {
       wasteId,
       collectorId,
       amount,
+      pricePerUnit,
+      quantity,
+      pickupType,
+      validity,
       message
     } = req.body;
 
     // Check required fields
-    if (!wasteId || !collectorId || amount === undefined) {
+    if (
+      !wasteId ||
+      !collectorId ||
+      amount === undefined ||
+      pricePerUnit === undefined ||
+      quantity === undefined ||
+      !pickupType
+    ) {
       return res.status(400).json({
         success: false,
-        message: "wasteId, collectorId and amount are required"
+        message:
+          "wasteId, collectorId, amount, pricePerUnit, quantity and pickupType are required"
       });
     }
 
@@ -28,12 +40,24 @@ const createQuote = async (req, res) => {
       });
     }
 
+    // Make sure quantity does not exceed collector submission
+    if (Number(quantity) > Number(waste.quantity)) {
+      return res.status(400).json({
+        success: false,
+        message: `Quantity cannot exceed collector submitted quantity of ${waste.quantity}`
+      });
+    }
+
     // Create quote
     const quote = await Quote.create({
       wasteId,
       collectorId,
-      amount,
-      message
+      amount: Number(amount),
+      pricePerUnit: Number(pricePerUnit),
+      quantity: Number(quantity),
+      pickupType,
+      validity: validity || "3 days",
+      message: message || ""
     });
 
     res.status(201).json({
@@ -45,9 +69,10 @@ const createQuote = async (req, res) => {
   } catch (error) {
     console.error("Create Quote Error:", error);
 
-    if (error.name === "ValidationError" ||
-       error.name === "CastError"
-      ) {
+    if (
+      error.name === "ValidationError" ||
+      error.name === "CastError"
+    ) {
       return res.status(400).json({
         success: false,
         message: "Invalid quote data",
