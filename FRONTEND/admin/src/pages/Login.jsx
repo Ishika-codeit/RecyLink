@@ -7,18 +7,21 @@ function Login() {
   const [password, setPassword] = useState('')
   const [collectorName, setCollectorName] = useState('')
   const navigate = useNavigate()
-
- const handleLogin = (e) => {
+const handleLogin = (e) => {
   e.preventDefault()
 
   if (role === 'admin') {
     navigate('/admin')
+    return
+  }
 
-  } else if (role === 'recycler') {
-    window.location.href = 'http://localhost:5175/'
+  if (role === 'recycler') {
+    window.location.href =
+      'https://recy-link-recycler.vercel.app/'
+    return
+  }
 
-  } else if (role === 'collector') {
-
+  if (role === 'collector') {
     if (!collectorName.trim()) {
       alert('Please enter your collector name.')
       return
@@ -29,11 +32,14 @@ function Login() {
       JSON.stringify({
         name: collectorName.trim(),
         role: 'collector',
-        email: email,
+        email: email.trim(),
       })
     )
 
-    window.location.href = 'http://localhost:5174/'
+    window.location.href =
+      'https://recylink-collector.vercel.app/'
+
+    return
   }
 }
   return (
