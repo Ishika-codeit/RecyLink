@@ -54,7 +54,7 @@ function AddEwaste() {
         setError('')
 
         const response = await fetch(
-          'http://localhost:5000/api/demands'
+          'https://recylink-zt6e.onrender.com/api/demands'
         )
 
         const result = await response.json()
@@ -308,7 +308,7 @@ data.append(
       // ---------------------------------
 
       const response = await fetch(
-        'http://localhost:5000/api/waste',
+        'https://recylink-zt6e.onrender.com/api/waste',
         {
           method: 'POST',
           body: data,
