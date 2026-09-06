@@ -30,10 +30,10 @@ const createWaste = async (req, res) => {
 
     // Send image to AI service
     const aiResult = await checkWaste(
-      req.file.path,
-      condition
-    );
-
+  req.file.buffer,
+  req.file.originalname,
+  condition
+);
     // Save waste + AI result
     const waste = await Waste.create({
       wasteType,
@@ -41,7 +41,7 @@ const createWaste = async (req, res) => {
       location,
       condition,
       collectorName,
-      image: req.file.path,
+      image: req.file.originalname,
 
       category: aiResult.category,
       classificationConfidence:

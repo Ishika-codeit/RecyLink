@@ -1,14 +1,16 @@
 const axios = require("axios");
 const FormData = require("form-data");
-const fs = require("fs");
 
-const checkWaste = async (imagePath, condition) => {
+const checkWaste = async (imageBuffer, originalName, condition) => {
   try {
     const formData = new FormData();
 
     formData.append(
       "image",
-      fs.createReadStream(imagePath)
+      imageBuffer,
+      {
+        filename: originalName || "waste-image.jpg",
+      }
     );
 
     formData.append("condition", condition);
@@ -18,8 +20,11 @@ const checkWaste = async (imagePath, condition) => {
       formData,
       {
         headers: {
-          ...formData.getHeaders()
-        }
+          ...formData.getHeaders(),
+        },
+        maxContentLength: Infinity,
+        maxBodyLength: Infinity,
+        timeout: 120000,
       }
     );
 
@@ -35,5 +40,5 @@ const checkWaste = async (imagePath, condition) => {
 };
 
 module.exports = {
-  checkWaste
+  checkWaste,
 };
